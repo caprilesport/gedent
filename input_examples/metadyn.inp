@@ -1,0 +1,15 @@
+$wall
+ potential=logfermi
+ sphere: auto, all
+$md
+ # restart=true
+ # time=200
+ step=1
+ temp=298.15
+ shake=0
+ hmass=1
+$metadyn
+ atoms: 8, 13, 15-16, 23, 24, 28
+ # save=200
+ kpush=0.0220
+ alp=0.50
