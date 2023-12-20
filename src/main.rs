@@ -16,13 +16,6 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Mode {
-    /// generates a .gedent.toml file with configurations to be used
-    /// in the current project, options are a file to be used as default, if none
-    /// is provided, use the default in ~/.config/gedent
-    Init {
-        /// optional config file
-        config_file: Option<std::path::PathBuf>,
-    },
     ///Generate a new input based on a template and a xyz file
     Gen {
         /// The template to look for in ~/.config/gedent/templates
@@ -39,7 +32,6 @@ enum Mode {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    let cfg = get_config()?;
 
     match cli.mode {
         Mode::Init { config_file } => {
@@ -52,7 +44,9 @@ fn main() -> Result<()> {
             new_template();
         }
         Mode::Config {} => {
-            dbg!(cfg);
+            // TODO: find out how to read from a specific directory (should this be so hard? lol
+            let path = std::path::Path::new("gedent.toml");
+            get_config(path)?
         }
     };
 
