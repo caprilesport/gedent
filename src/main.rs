@@ -9,7 +9,7 @@ use gedent::get_config;
 struct Cli {
     #[command(subcommand)]
     mode: Mode,
-    /// Verbosity options.
+    // Verbosity options.
     #[clap(flatten)]
     verbosity: clap_verbosity_flag::Verbosity,
 }
@@ -20,29 +20,28 @@ enum Mode {
     Gen {
         /// The template to look for in ~/.config/gedent/templates
         template: String,
-        /// xyzfile to be used for structure
-        xyz_file: std::path::PathBuf,
+        //last arguments may be optional
+        #[arg(last = true)]
+        opt_args: Vec<String>,
     },
     /// prints the current configurations as well as the location of the config file
     Config {},
-    /// generates a new template for a jobfile specified for a certain software
-    /// args are the software (plans are to support orca, gaussian and ADF initially)
-    New {},
 }
 
+fn gen_template(template: String, opts: Vec<String>) -> Result<()> {
+    println!(
+        "generating input with template {} and extra args {:?}",
+        template, opts
+    );
+    Ok(())
+}
+
+// main logic goes here
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.mode {
-        Mode::Init { config_file } => {
-            init();
-        }
-        Mode::Gen { template, xyz_file } => {
-            gen_template();
-        }
-        Mode::New {} => {
-            new_template();
-        }
+        Mode::Gen { template, opt_args } => gen_template(template, opt_args)?,
         Mode::Config {} => {
             // TODO: find out how to read from a specific directory (should this be so hard? lol
             let path = std::path::Path::new("gedent.toml");
@@ -51,16 +50,4 @@ fn main() -> Result<()> {
     };
 
     Ok(())
-}
-
-fn init() {
-    println!("init")
-}
-
-fn gen_template() {
-    println!("generating input")
-}
-
-fn new_template() {
-    println!("generating new template")
 }
