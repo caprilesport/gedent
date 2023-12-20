@@ -1,0 +1,4 @@
+solvation = true
+solvent = "water"
+dft_level = "PB86"
+dft_basis_set = "def2svp"

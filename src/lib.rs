@@ -1,27 +1,19 @@
 #![allow(unused_variables, unused_imports)]
+use std::collections::HashMap;
+use std::path::Path;
+use toml::Table;
+use std::fs;
 use anyhow::{Context, Result};
-use serde_derive::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct GedentConfig {
-    dft_method: String,
-    basis_set: String,
-    dft_solvation_model: String,
-    solvent: String,
+
+// Get config file
+pub fn get_config(config_file: &Path) -> Result<()> {
+    let config_file = fs::read_to_string(config_file)?;
+    let cfg: Table = config_file.parse().unwrap();
+    println!("Config in table format\n");
+    dbg!(&cfg);
+    Ok(())
 }
 
-impl ::std::default::Default for GedentConfig {
-    fn default() -> Self {
-        Self {
-            dft_method: String::from("PBE0"),
-            basis_set: String::from("def2-TZVP"),
-            dft_solvation_model: String::from("CPCM"),
-            solvent: String::from("water"),
-        }
-    }
-}
 
-pub fn get_config() -> Result<GedentConfig, confy::ConfyError> {
-    let cfg: GedentConfig = confy::load("gedent", ".gedent")?;
-    Ok(cfg)
-}
+// Check for config file in projct folder
