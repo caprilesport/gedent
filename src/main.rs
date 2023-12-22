@@ -16,24 +16,23 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Mode {
-    ///Generate a new input based on a template and a xyz file
+    // Generate a new input based on a template and a xyz file
     Gen {
-        /// The template to look for in ~/.config/gedent/templates
+        // The template to look for in ~/.config/gedent/templates
         template: String,
-        //last arguments may be optional
+        // Add some common parameters as flags (maybe?)
+        // Last arguments are the required xyz files
+        // Can i make this a flag maybe? -xyz
         #[arg(last = true)]
         opt_args: Vec<String>,
     },
-    /// prints the current configurations as well as the location of the config file
+    // Subcommand to deal with configurations
+    // set, where, add. remove, get inspiration in gh
     Config {},
-}
-
-fn gen_template(template: String, opts: Vec<String>) -> Result<()> {
-    println!(
-        "generating input with template {} and extra args {:?}",
-        template, opts
-    );
-    Ok(())
+    // Subcommand to deal with templates:
+    // list, print, edit
+    // Subcommand for init gedent "repo"
+    // Init {},
 }
 
 // main logic goes here
@@ -41,11 +40,9 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.mode {
-        Mode::Gen { template, opt_args } => gen_template(template, opt_args)?,
+        Mode::Gen { template, opt_args } => generate_template(template, opt_args)?,
         Mode::Config {} => {
-            // TODO: find out how to read from a specific directory (should this be so hard? lol
-            let path = std::path::Path::new("gedent.toml");
-            get_config(path)?
+            println!("Placeholder, subcommand to be added");
         }
     };
 
