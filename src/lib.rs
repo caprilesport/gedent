@@ -32,4 +32,31 @@ fn get_gedent_home() -> Result<PathBuf, Error> {
     Ok(gedent_home)
 }
 
+// Template functionality
+fn get_template_path(template: String) -> Result<String, Error> {
+    let mut tpl_path = get_gedent_home()?;
+    tpl_path.push(String::from("templates/") + &template);
+    let tpl = std::fs::read_to_string(&tpl_path).context(format!("Cant find template {:?}", tpl_path))?;
+    Ok(tpl)
+}
+
+pub fn generate_template(template: String, options: Vec<String>) -> Result<(), Error> {
+    let config_file = String::from("gedent.toml");
+    let config_dir = get_config_dir()?;
+    let cfg = get_config(config_file)?;
+    let mut context = tera::Context::new();
+
+    // Surprisingly, for me at least, passing toml::Value already works 
+    // when using the typed values in TERA templates.
+    for (key, value) in cfg {
+        context.insert(key, &value);
+    }
+    
+    // TODO: parse template to see if xyz file is needed
+   
+    let tpl = get_template_path(template)?;
+    let result = Tera::one_off(&tpl, &context, true)?;
+    println!("{}", result);
+    Ok(())
+}
 
