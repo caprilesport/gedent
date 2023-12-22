@@ -1,7 +1,7 @@
 #![allow(unused_variables, unused_imports)]
 use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use gedent::get_config;
+use gedent::generate_template;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
