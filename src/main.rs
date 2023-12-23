@@ -30,9 +30,21 @@ enum Mode {
     // set, where, add. remove, get inspiration in gh
     Config {},
     // Subcommand to deal with templates:
+    Template {
+        #[command(subcommand)]
+        template_subcommand: TemplateSubcommand,
+    },
     // list, print, edit
     // Subcommand for init gedent "repo"
-    // Init {},
+    Init {},
+}
+
+#[derive(Debug, Subcommand)]
+enum TemplateSubcommand {
+    Print { template: String },
+    New {},
+    List {},
+    Edit {},
 }
 
 // main logic goes here
@@ -42,7 +54,26 @@ fn main() -> Result<()> {
     match cli.mode {
         Mode::Gen { template, opt_args } => generate_template(template, opt_args)?,
         Mode::Config {} => {
-            println!("Placeholder, subcommand to be added");
+            println!("Config placeholder, subcommand to be added");
+        }
+        Mode::Template {
+            template_subcommand,
+        } => match template_subcommand {
+            TemplateSubcommand::New {} => {
+                println!("template new");
+            }
+            TemplateSubcommand::List {} => {
+                println!("Template list")
+            }
+            TemplateSubcommand::Edit {} => {
+                println!("Template edit")
+            }
+            TemplateSubcommand::Print { template } => {
+                println!("Template print {}", template)
+            }
+        },
+        Mode::Init {} => {
+            println!("Init placeholder, subcommand to be added");
         }
     };
 
