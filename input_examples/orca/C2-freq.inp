@@ -1,9 +1,0 @@
-!B3LYP D3BJ ZORA ZORA-def2-TZVPP def2-TZVPP/C SARC/J TightSCF TightOPT Freq
-
-%PAL
-NProcs 24
-end
-
-%maxcore 5000
-
-*xyzfile 0 1 C2.xyz
