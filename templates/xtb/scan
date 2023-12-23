@@ -1,0 +1,13 @@
+$constrain
+   force constant=0.5
+   distance: 1, 4, 0.5
+   angle: 2, 1, 3, 150.0
+   dihedral: 2, 1, 3, 4, auto
+$scan
+   mode=concerted
+   1:   0.5,  1.4, 60
+   2: 150.0, 90.0, 60
+$opt
+   maxcycle=5
+$end
+
