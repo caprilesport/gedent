@@ -1,7 +1,7 @@
 #![allow(unused_variables, unused_imports)]
 use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use gedent::{edit_template, generate_template};
+use gedent::{edit_template, generate_template, list_templates, print_template};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -10,8 +10,8 @@ struct Cli {
     #[command(subcommand)]
     mode: Mode,
     // Verbosity options.
-    #[clap(flatten)]
-    verbosity: clap_verbosity_flag::Verbosity,
+    // #[clap(flatten)]
+    // verbosity: clap_verbosity_flag::Verbosity,
 }
 
 #[derive(Debug, Subcommand)]
@@ -22,13 +22,13 @@ enum Mode {
         template: String,
         // Add some common parameters as flags (maybe?)
         // Last arguments are the required xyz files
-        // Can i make this a flag maybe? -xyz
+        // Can i make this a flag maybe? --xyz
         #[arg(last = true)]
-        opt_args: Vec<String>,
+        xyz_files: Vec<String>,
     },
     // Subcommand to deal with configurations
-    // set, where, add. remove, get inspiration in gh
-    Config {},
+    // set, where, add, remove, get inspiration in gh
+    // Config {},
     // Subcommand to deal with templates:
     Template {
         #[command(subcommand)]
@@ -83,15 +83,11 @@ fn main() -> Result<()> {
         Mode::Template {
             template_subcommand,
         } => match template_subcommand {
-            TemplateSubcommand::Print { template } => {
-                println!("Template print {}", template);
-            }
+            TemplateSubcommand::Print { template } => print_template(template)?,
             TemplateSubcommand::New { software } => {
                 println!("Template new");
             }
-            TemplateSubcommand::List {} => {
-                println!("Template list");
-            }
+            TemplateSubcommand::List {} => list_templates()?,
             TemplateSubcommand::Edit { template } => edit_template(template)?,
         },
         // Mode::Init {} => {
