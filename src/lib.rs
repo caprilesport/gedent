@@ -4,6 +4,7 @@ use toml::Table;
 use anyhow::{Result, Error, anyhow, Context};
 use toml::Value;
 use tera::Tera;
+use edit;
 
 
 // Config functionality
@@ -33,11 +34,10 @@ fn get_gedent_home() -> Result<PathBuf, Error> {
 }
 
 // Template functionality
-fn get_template_path(template: String) -> Result<String, Error> {
+fn get_template_path(template: String) -> Result<PathBuf, Error> {
     let mut tpl_path = get_gedent_home()?;
     tpl_path.push(String::from("templates/") + &template);
-    let tpl = std::fs::read_to_string(&tpl_path).context(format!("Cant find template {:?}", tpl_path))?;
-    Ok(tpl)
+    Ok(tpl_path)
 }
 
 pub fn generate_template(template: String, options: Vec<String>) -> Result<(), Error> {
@@ -54,9 +54,16 @@ pub fn generate_template(template: String, options: Vec<String>) -> Result<(), E
     
     // TODO: parse template to see if xyz file is needed
    
-    let tpl = get_template_path(template)?;
+    let tpl_path = get_template_path(template)?;
+    let tpl = std::fs::read_to_string(&tpl_path).context(format!("Cant find template {:?}", tpl_path))?;
     let result = Tera::one_off(&tpl, &context, true)?;
     println!("{}", result);
     Ok(())
 }
 
+pub fn edit_template(template: String) -> Result<(), Error> {
+    let editor = std::env::var_os("EDITOR").ok_or(anyhow!("Error fetching default editor"))?;
+    let template_path = get_template_path(template)?;
+    edit::edit_file(template_path)?;
+    Ok(())
+}
