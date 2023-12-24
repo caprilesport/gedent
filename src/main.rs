@@ -34,9 +34,8 @@ enum Mode {
         #[command(subcommand)]
         template_subcommand: TemplateSubcommand,
     },
-    // list, print, edit
     // Subcommand for init gedent "repo"
-    // Init {},
+    Init {},
 }
 
 #[derive(Debug, Subcommand)]
@@ -88,9 +87,9 @@ fn main() -> Result<()> {
             TemplateSubcommand::List {} => list_templates()?,
             TemplateSubcommand::Edit { template } => edit_template(template)?,
         },
-        // Mode::Init {} => {
-        //     println!("Init placeholder, function to be added");
-        // }
+        Mode::Init {} => {
+            println!("Init placeholder, function to be added");
+        }
     };
 
     Ok(())
