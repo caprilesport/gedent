@@ -1,7 +1,7 @@
 #![allow(unused_variables, unused_imports)]
 use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use gedent::{edit_template, generate_template, list_templates, print_template};
+use gedent::{edit_template, generate_template, list_templates, new_template, print_template};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -9,7 +9,6 @@ use gedent::{edit_template, generate_template, list_templates, print_template};
 struct Cli {
     #[command(subcommand)]
     mode: Mode,
-    // Verbosity options.
     // #[clap(flatten)]
     // verbosity: clap_verbosity_flag::Verbosity,
 }
@@ -20,9 +19,10 @@ enum Mode {
     Gen {
         // The template to look for in ~/.config/gedent/templates
         template: String,
-        // Add some common parameters as flags (maybe?)
+        // TODO: Add some common parameters as flags:
+        // Solvation, charge, mult, theory level, basis set (what else?)
         // Last arguments are the required xyz files
-        // Can i make this a flag maybe? --xyz
+        // TODO: Make this a flag
         #[arg(last = true)]
         xyz_files: Vec<String>,
     },
@@ -84,9 +84,7 @@ fn main() -> Result<()> {
             template_subcommand,
         } => match template_subcommand {
             TemplateSubcommand::Print { template } => print_template(template)?,
-            TemplateSubcommand::New { software } => {
-                println!("Template new");
-            }
+            TemplateSubcommand::New { software } => new_template(software)?,
             TemplateSubcommand::List {} => list_templates()?,
             TemplateSubcommand::Edit { template } => edit_template(template)?,
         },
