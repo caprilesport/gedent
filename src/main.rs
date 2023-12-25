@@ -83,7 +83,10 @@ fn main() -> Result<()> {
             template_subcommand,
         } => match template_subcommand {
             TemplateSubcommand::Print { template } => print_template(template)?,
-            TemplateSubcommand::New { software } => new_template(software)?,
+            TemplateSubcommand::New {
+                software,
+                template_name,
+            } => new_template(software, template_name)?,
             TemplateSubcommand::List {} => list_templates()?,
             TemplateSubcommand::Edit { template } => edit_template(template)?,
         },
