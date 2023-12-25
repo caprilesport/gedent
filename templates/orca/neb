@@ -1,0 +1,42 @@
+! {{ dft_level }} {{ dft_basis_set }} 
+! NEB-TS NumFreq IRC
+
+*xyzfile {{ charge }} {{ mult }} {{ xyz_file }}
+
+%pal
+ nprocs {{ nprocs }}
+end
+
+%maxcore {{ memory }} 
+
+{% if solvation -%}
+%cpcm
+ smd true
+ smdsolvent "{{ solvent }}"
+end
+{% endif -%}
+
+%neb
+ neb_ts_xyzfile "{{ xyz_file }}"
+ neb_end_xyzfile "{{ xyz_file }}"
+ nimages 29
+ preopt_ends true
+end
+
+%geom
+ ts_mode
+  {B 12 23} # bond active in ts
+ end
+ ts_active_atoms
+  {3 7 12 14 15 22 23 27} # atons involved in ts
+ end
+ maxiter 256
+end
+
+%irc
+ de_init_displ 1.0
+ tolrmsg 3e-4
+ tolmaxg 9e-4
+ maxiter 256
+end
+
