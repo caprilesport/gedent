@@ -1,6 +1,6 @@
-#![allow(unused_variables, unused_imports)]
+#![allow(unused_variables)]
 use anyhow::{anyhow, Context, Error, Result};
-use clap::{Args, Parser, Subcommand, ValueEnum};
+use clap::{Parser, Subcommand, ValueEnum};
 use std::{fs, path::PathBuf};
 use tera::Tera;
 use toml::{Table, Value};
@@ -11,8 +11,6 @@ use toml::{Table, Value};
 struct Cli {
     #[command(subcommand)]
     mode: Mode,
-    // #[clap(flatten)]
-    // verbosity: clap_verbosity_flag::Verbosity,
 }
 
 #[derive(Debug, Subcommand)]
@@ -29,13 +27,19 @@ enum Mode {
         /// xyz files
         #[arg(last = true)]
         xyz_files: Vec<String>,
+        /// Sets a custom config file
+        #[arg(short, long, value_name = "FILE")]
+        config: Option<PathBuf>,
     },
     // Subcommand to deal with configurations
-    // set, where, add, remove, get inspiration in gh
+    /// Access gedent configuration
     #[command(alias = "c")]
-    Config {},
+    Config {
+        #[command(subcommand)]
+        config_subcommand: ConfigSubcommand,
+    },
     // Subcommand to deal with templates:
-    /// Interact with template functionality
+    /// Access template functionality
     #[command(alias = "t")]
     Template {
         #[command(subcommand)]
@@ -43,7 +47,10 @@ enum Mode {
     },
     // Subcommand for init gedent "repo"
     /// Initiate a gedent repository with config cloned from ~/.config/gedent
-    Init {},
+    Init {
+        // optional config to create when initiating the gedent repo
+        config: Option<String>,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -76,6 +83,97 @@ enum TemplateSubcommand {
         // opens a given template in $EDITOR
         template: String,
     },
+}
+
+#[derive(Debug, Subcommand)]
+enum ConfigSubcommand {
+    /// Prints the location and the currently used configuration
+    Print {},
+    /// Sets key to value in the config file, keeps the same type as was setted.
+    Set {
+        /// Key to be added
+        key: String,
+        /// Value associated with key
+        value: String,
+    },
+    /// Adds a key, value to the config file, for typed values use an option
+    Add {
+        /// Key to be added
+        key: String,
+        /// Value associated with key, can be a string, int, float or bool. Default is string.
+        value: String,
+        /// Sets the type of the value in the config file
+        #[arg(short, long)]
+        type_of_value: ArgType,
+    },
+    /// Deletes a certain key in the configuration
+    Del {
+        /// Key to be deleted.
+        key: String,
+    },
+    /// Opens the config file in your default editor.
+    Edit {},
+}
+
+#[derive(Clone, Debug, Default, ValueEnum)]
+enum ArgType {
+    #[default]
+    String,
+    Float,
+    Int,
+    Bool,
+}
+
+fn main() -> Result<()> {
+    let cli = Cli::parse();
+
+    match cli.mode {
+        Mode::Gen {
+            template,
+            xyz_files,
+            config,
+        } => {
+            // for now just call fn to generate template
+            generate_template(template, xyz_files, config)?
+        }
+
+        Mode::Config { config_subcommand } => match config_subcommand {
+            ConfigSubcommand::Print {} => {}
+            ConfigSubcommand::Set { key, value } => {}
+            ConfigSubcommand::Add {
+                key,
+                value,
+                type_of_value,
+            } => {}
+            ConfigSubcommand::Del { key } => {}
+            ConfigSubcommand::Edit {} => {}
+        },
+
+        Mode::Template {
+            template_subcommand,
+        } => match template_subcommand {
+            TemplateSubcommand::Print { template } => print_template(template)?,
+            TemplateSubcommand::New {
+                software,
+                template_name,
+            } => new_template(software, template_name)?,
+            TemplateSubcommand::List {} => list_templates()?,
+            TemplateSubcommand::Edit { template } => edit_template(template)?,
+        },
+
+        Mode::Init { config } => {
+            if let Some(config) = config {
+                println!(
+                    "Initiated gedent project with {} as config at .gedent",
+                    config
+                );
+            } else {
+                println!("Initiated gedent project at .gedent");
+            }
+        }
+    };
+
+    Ok(())
 }
 
 // Config functionality
@@ -194,37 +292,4 @@ fn render_template(template_name: String, context: tera::Context) -> Result<Stri
         .context(format!("Cant find template {:?}", template_path))?;
     let result = Tera::one_off(&template, &context, true).context("Failed to render template.")?;
     Ok(result)
-}
-
-fn main() -> Result<()> {
-    let cli = Cli::parse();
-
-    match cli.mode {
-        Mode::Gen {
-            template,
-            xyz_files,
-        } => {
-            // for now just call fn to generate template
-            generate_template(template, xyz_files)?
-        }
-        Mode::Config {} => {
-            println!("Config placeholder, subcommand to be added");
-        }
-        Mode::Template {
-            template_subcommand,
-        } => match template_subcommand {
-            TemplateSubcommand::Print { template } => print_template(template)?,
-            TemplateSubcommand::New {
-                software,
-                template_name,
-            } => new_template(software, template_name)?,
-            TemplateSubcommand::List {} => list_templates()?,
-            TemplateSubcommand::Edit { template } => edit_template(template)?,
-        },
-        Mode::Init {} => {
-            println!("Init placeholder, function to be added");
-        }
-    };
-
-    Ok(())
 }
