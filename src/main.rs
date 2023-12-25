@@ -15,14 +15,15 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Mode {
-    // Generate a new input based on a template and a xyz file
+    /// Generate a new input based on a template and a xyz file
     Gen {
-        // The template to look for in ~/.config/gedent/templates
+        /// The template to look for in ~/.config/gedent/templates
         template: String,
         // TODO: Add some common parameters as flags:
         // Solvation, charge, mult, theory level, basis set (what else?)
         // Last arguments are the required xyz files
         // TODO: Make this a flag
+        /// xyz files
         #[arg(last = true)]
         xyz_files: Vec<String>,
     },
@@ -30,34 +31,40 @@ enum Mode {
     // set, where, add, remove, get inspiration in gh
     // Config {},
     // Subcommand to deal with templates:
+    /// Interact with template functionality
     Template {
         #[command(subcommand)]
         template_subcommand: TemplateSubcommand,
     },
     // Subcommand for init gedent "repo"
+    /// Initiate a gedent repository with config cloned from ~/.config/gedent
     Init {},
 }
 
 #[derive(Debug, Subcommand)]
 enum TemplateSubcommand {
-    // Prints the unformatted template to stdout
+    /// Prints the unformatted template to stdout
     Print {
         // name of template to search for
         template: String,
     },
+    /// Create a new template from a preset located in ~/.config/gedent/presets
     New {
         // Here there will ne an enum which will hold all basic boilerplate
         // templates for a simple singlepoint in the following softwares:
         // ADF, GAMESSUS, GAMESSUK, Gaussian, MOLPRO, NWChem, ORCA
         // also, template will be added in .gedent folder
         software: String,
+        template_name: String,
     },
+    /// List available templates
     List {
         // Lists all available templates
         // TODO: decide how to deal with organization in the folder
         // Prints primarely in .gedent available, otherwise falls back to
         // $XDG_CONFIG
     },
+    /// Edit a given template
     Edit {
         // opens a given template in $EDITOR
         template: String,
