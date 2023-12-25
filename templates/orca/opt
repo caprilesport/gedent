@@ -1,0 +1,26 @@
+! {{ dft_level }} {{ dft_basis_set }} 
+! Opt freq D3BJ
+
+%pal
+ nprocs {{ nprocs }}
+end
+
+%maxcore {{ memory }} 
+
+{% if solvation -%}
+%cpcm
+ smd true
+ smdsolvent "{{ solvent }}"
+end
+
+{% endif -%} 
+
+{% if start_hessian -%}
+%Geom
+ InHess Read
+ InHessName "{{ hess_file }}"
+end
+
+{% endif -%} 
+
+*xyzfile {{ charge }} {{ mult }} {{ xyz_file }}
