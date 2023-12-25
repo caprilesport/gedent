@@ -177,13 +177,23 @@ fn main() -> Result<()> {
 }
 
 // Config functionality
-fn get_config(config_file: String) -> Result<toml::map::Map<String, Value>, anyhow::Error> {
+
+fn parse_config(config_path: PathBuf) -> Result<toml::map::Map<String, Value>, anyhow::Error> {
+    let config_file = std::fs::read_to_string(&config_path)
+        .context(format!("Cant open config {:?}", config_path))?;
+    let config: Table = config_file.parse()?;
+    Ok(config)
+}
+
+// this function should search for .gedent, if it doesnt find look for gedent home
+// then parse the config and return it
+// so other functions that need the config just call this function
+fn get_config() -> Result<toml::map::Map<String, Value>, anyhow::Error> {
+    let config_file = String::from("gedent.toml");
     let mut config_dir = get_config_dir()?;
     config_dir.push(config_file);
-    let config_file = std::fs::read_to_string(&config_dir)
-        .context(format!("Cant open config {:?}", config_dir))?;
-    let cfg: Table = config_file.parse()?;
-    Ok(cfg)
+    let config = parse_config(config_dir)?;
+    Ok(config)
 }
 
 // TODO: implement git-like functionality
@@ -204,9 +214,12 @@ fn get_gedent_home() -> Result<PathBuf, Error> {
 }
 
 // Template functionality
-pub fn generate_template(template: String, options: Vec<String>) -> Result<(), Error> {
-    let config_file = String::from("gedent.toml");
-    let cfg = get_config(config_file)?;
+pub fn generate_template(
+    template: String,
+    options: Vec<String>,
+    config: Option<PathBuf>,
+) -> Result<(), Error> {
+    let cfg = get_config()?;
     let mut context = tera::Context::new();
 
     // Surprisingly, for me at least, passing toml::Value already works
@@ -281,9 +294,10 @@ fn print_descent_dir(entry: PathBuf, gedent_home_len: usize) -> Result<(), Error
 }
 
 fn get_template_path(template: String) -> Result<PathBuf, Error> {
-    let mut tpl_path = get_gedent_home()?;
-    tpl_path.push(String::from("templates/") + &template);
-    Ok(tpl_path)
+    let mut template_path = get_gedent_home()?;
+    template_path.push(String::from("templates"));
+    template_path.push(template);
+    Ok(template_path)
 }
 
 fn render_template(template_name: String, context: tera::Context) -> Result<String, Error> {
