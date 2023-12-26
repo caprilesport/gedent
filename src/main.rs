@@ -206,7 +206,7 @@ fn get_gedent_home() -> Result<PathBuf, Error> {
 }
 
 // Template functionality
-pub fn generate_template(
+fn generate_template(
     template: String,
     options: Vec<String>,
     config: Option<PathBuf>,
@@ -227,14 +227,14 @@ pub fn generate_template(
     Ok(())
 }
 
-pub fn edit_template(template: String) -> Result<(), Error> {
+fn edit_template(template: String) -> Result<(), Error> {
     let template_path = get_template_path(template)?;
     // The edit crate makes this work in all platforms.
     edit::edit_file(template_path)?;
     Ok(())
 }
 
-pub fn print_template(template: String) -> Result<(), Error> {
+fn print_template(template: String) -> Result<(), Error> {
     let template_path = get_template_path(template)?;
     let template = std::fs::read_to_string(&template_path)
         .context(format!("Cant find template {:?}", template_path))?;
@@ -244,7 +244,7 @@ pub fn print_template(template: String) -> Result<(), Error> {
 
 // Basic logic is correct, would be nice if the user could set where these
 // directories are.
-pub fn new_template(software: String, template_name: String) -> Result<(), Error> {
+fn new_template(software: String, template_name: String) -> Result<(), Error> {
     let mut boilerplate = get_gedent_home()?;
     let mut template_path = boilerplate.clone();
     template_path.push(String::from("templates"));
@@ -257,7 +257,7 @@ pub fn new_template(software: String, template_name: String) -> Result<(), Error
     Ok(())
 }
 
-pub fn list_templates() -> Result<(), Error> {
+fn list_templates() -> Result<(), Error> {
     let mut gedent_home = get_gedent_home()?;
     gedent_home.push(String::from("templates"));
     // +1 is here to remove the first slash
