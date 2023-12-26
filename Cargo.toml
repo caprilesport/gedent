@@ -1,7 +1,12 @@
 [package]
 name = "gedent"
 version = "0.1.0"
+authors = ["Vinicius Capriles Port <caprilesport@gmail.com>"]
 edition = "2021"
+description = "A command-line interface to generate computational chemistry inputs"
+repository = "https://github.com/caprilesport/gedent"
+license = "MIT"
+rust-version = "1.65.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -15,3 +20,4 @@ serde_derive = "1.0.152"
 tera = "1"
 toml = "0.8.8"
 wild = "2.1.0"
+
