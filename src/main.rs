@@ -180,6 +180,33 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+//Search for paths
+fn get_gedent_home() -> Result<PathBuf, Error> {
+    let home_dir = std::env::var_os("HOME").ok_or(anyhow!("Error fetching home directory"))?;
+    // TODO: make this system agnostic in the future - only works in linux
+    // I saw a dir crate that may help
+    // https://docs.rs/dirs/latest/dirs/fn.config_dir.html
+    let gedent_home: PathBuf = [home_dir, Into::into(".config/gedent")].iter().collect();
+    Ok(gedent_home)
+}
+
+// git-like search, stop if .gedent folder is found or if
+// parent_folder = current_folder
+fn find_gedent_folder(dir: PathBuf) -> Result<PathBuf, Error> {
+    let mut gedent = dir.clone();
+    gedent.push(DIR_NAME);
+
+    if std::path::Path::try_exists(&gedent)? {
+        return Ok(gedent);
+    } else {
+        let parent_folder = dir.parent();
+        match parent_folder {
+            Some(parent) => return Ok(find_gedent_folder(parent.to_path_buf())?),
+            None => return Ok(get_gedent_home()?),
+        };
+    }
+}
+
 // Config functionality
 fn parse_config(config_path: &PathBuf) -> Result<toml::map::Map<String, Value>, anyhow::Error> {
     let config_file = std::fs::read_to_string(&config_path)
@@ -188,20 +215,23 @@ fn parse_config(config_path: &PathBuf) -> Result<toml::map::Map<String, Value>, 
     Ok(config)
 }
 
-// this function should search for .gedent, if it doesnt find look for gedent home
-// then parse the config and return it
-// so other functions that need the config just call this function
-fn get_config() -> Result<toml::map::Map<String, Value>, anyhow::Error> {
-    let config_file = String::from("gedent.toml");
-    let mut config_dir = get_config_dir()?;
-    config_dir.push(CONFIG_NAME);
-    Ok(config_dir)
+fn write_config(config_path: PathBuf, config: toml::map::Map<String, Value>) -> Result<(), Error> {
+    Ok(())
 }
 
-// TODO: implement git-like functionality
-fn get_config_dir() -> Result<PathBuf, Error> {
-    let gedent_home = get_gedent_home()?;
-    Ok(gedent_home)
+fn get_config_path() -> Result<PathBuf, Error> {
+    let current_dir = std::env::current_dir()?;
+    let config = PathBuf::from(CONFIG_NAME);
+    Ok([find_gedent_folder(current_dir)?, config].iter().collect())
+}
+
+fn set_config(key: String, value: String) -> Result<(), Error> {
+    println!("Setting config {}, {}", key, value);
+    let config_path = get_config_path()?;
+    let config = parse_config(&config_path)?;
+
+    write_config(config_path, config)?;
+    Ok(())
 }
 
 fn edit_config() -> Result<(), Error> {
@@ -231,15 +261,6 @@ fn add_config(key: String, value: String, type_of_value: ArgType) -> Result<(), 
         key, value, type_of_value
     );
     Ok(())
-}
-
-fn get_gedent_home() -> Result<PathBuf, Error> {
-    let home_dir = std::env::var_os("HOME").ok_or(anyhow!("Error fetching home directory"))?;
-    // TODO: make this system agnostic in the future - only works in linux
-    // I saw a dir crate that may help
-    // https://docs.rs/dirs/latest/dirs/fn.config_dir.html
-    let gedent_home: PathBuf = [home_dir, Into::into(".config/gedent")].iter().collect();
-    Ok(gedent_home)
 }
 
 // Template functionality
