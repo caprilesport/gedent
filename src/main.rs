@@ -1,8 +1,7 @@
 #![allow(unused_variables, unused_imports)]
 use anyhow::{anyhow, Context, Error, Result};
 use clap::{Parser, Subcommand, ValueEnum};
-use std::fs;
-use std::fs::create_dir;
+use std::fs::{copy, create_dir, read_dir, read_to_string, write};
 use std::path::PathBuf;
 use tera::Tera;
 use toml::{Table, Value};
@@ -158,7 +157,7 @@ fn main() -> Result<()> {
                 value,
                 type_of_value,
             } => add_config(key, value, type_of_value)?,
-            ConfigSubcommand::Del { key } => delete_config()?,
+            ConfigSubcommand::Del { key } => delete_config(key)?,
             ConfigSubcommand::Edit {} => edit_config()?,
         },
 
@@ -209,13 +208,15 @@ fn find_gedent_folder(dir: PathBuf) -> Result<PathBuf, Error> {
 
 // Config functionality
 fn parse_config(config_path: &PathBuf) -> Result<toml::map::Map<String, Value>, anyhow::Error> {
-    let config_file = std::fs::read_to_string(&config_path)
-        .context(format!("Cant open config {:?}", config_path))?;
+    let config_file =
+        read_to_string(&config_path).context(format!("Cant open config {:?}", config_path))?;
     let config: Table = config_file.parse()?;
     Ok(config)
 }
 
 fn write_config(config_path: PathBuf, config: toml::map::Map<String, Value>) -> Result<(), Error> {
+    write(&config_path, config.to_string())?;
+    println!("Config wrote to {:?}.", config_path);
     Ok(())
 }
 
@@ -225,10 +226,74 @@ fn get_config_path() -> Result<PathBuf, Error> {
     Ok([find_gedent_folder(current_dir)?, config].iter().collect())
 }
 
-fn set_config(key: String, value: String) -> Result<(), Error> {
-    println!("Setting config {}, {}", key, value);
+fn delete_config(key: String) -> Result<(), Error> {
     let config_path = get_config_path()?;
-    let config = parse_config(&config_path)?;
+    let mut config = parse_config(&config_path)?;
+    config.remove(&key);
+    println!("Removed key {}.", key);
+    write_config(config_path, config)?;
+    Ok(())
+}
+
+fn add_config(key: String, value: String, type_of_value: ArgType) -> Result<(), Error> {
+    let config_path = get_config_path()?;
+    let mut config = parse_config(&config_path)?;
+
+    if config.contains_key(&key) {
+        anyhow::bail!(format!("Config already contains {}, exiting.", key));
+    }
+
+    println!(
+        "Setting config {} to {} with argtype {:?}",
+        key, value, type_of_value
+    );
+
+    match type_of_value {
+        ArgType::Int => {
+            config.insert(key, Value::Integer(value.parse::<i64>()?));
+        }
+        ArgType::Bool => {
+            config.insert(key, Value::Boolean(value.parse::<bool>()?));
+        }
+        ArgType::Float => {
+            config.insert(key, Value::Float(value.parse::<f64>()?));
+        }
+        ArgType::String => {
+            config.insert(key, Value::String(value));
+        }
+    }
+
+    write_config(config_path, config)?;
+    Ok(())
+}
+
+fn set_config(key: String, value: String) -> Result<(), Error> {
+    let config_path = get_config_path()?;
+    let mut config = parse_config(&config_path)?;
+    let current_value = config
+        .get(&key)
+        .ok_or(anyhow!("Cant find {} in config.", key))?;
+
+    println!(
+        "Changing config {}, from {} to {}.",
+        key, current_value, value
+    );
+
+    match current_value {
+        Value::String(_current_value) => {
+            config[&key] = Value::String(value);
+        }
+        Value::Float(_current_value) => {
+            config[&key] = Value::Float(value.parse::<f64>()?);
+        }
+        Value::Integer(_current_value) => {
+            config[&key] = Value::Integer(value.parse::<i64>()?);
+        }
+        Value::Boolean(_current_value) => {
+            config[&key] = Value::Boolean(value.parse::<bool>()?);
+        }
+        _ => anyhow::bail!("Unsupported type"),
+    }
 
     write_config(config_path, config)?;
     Ok(())
@@ -242,24 +307,11 @@ fn edit_config() -> Result<(), Error> {
 
 fn print_config(location: bool) -> Result<(), Error> {
     let config_path = get_config_path()?;
-    let config = fs::read_to_string(&config_path)?;
+    let config = read_to_string(&config_path)?;
     if location {
         println!("Printing config from {:?}", config_path);
     }
     print!("{}", config);
-    Ok(())
-}
-
-fn delete_config() -> Result<(), Error> {
-    println!("Deleting config");
-    Ok(())
-}
-
-fn add_config(key: String, value: String, type_of_value: ArgType) -> Result<(), Error> {
-    println!(
-        "Setting config {} to {} with argtype {:?}",
-        key, value, type_of_value
-    );
     Ok(())
 }
 
@@ -295,7 +347,7 @@ fn edit_template(template: String) -> Result<(), Error> {
 
 fn print_template(template: String) -> Result<(), Error> {
     let template_path = get_template_path(template)?;
-    let template = std::fs::read_to_string(&template_path)
+    let template = read_to_string(&template_path)
         .context(format!("Cant find template {:?}", template_path))?;
     println!("{}", &template);
     Ok(())
@@ -315,7 +367,7 @@ fn new_template(software: String, template_name: String) -> Result<(), Error> {
     let boilerplate: PathBuf = [gedent_home, Into::into(PRESETS_DIR), Into::into(software)]
         .iter()
         .collect();
-    fs::copy(&boilerplate, &template_path)
+    copy(&boilerplate, &template_path)
         .context(format!("Cant open base {:?} template.", &boilerplate))?;
     edit::edit_file(template_path).context("Cant open editor.")?;
     Ok(())
@@ -331,7 +383,7 @@ fn list_templates() -> Result<(), Error> {
         .ok_or(anyhow!("Cant retrieve gedent home len"))?
         .len()
         + 1;
-    for entry in fs::read_dir(gedent_home)? {
+    for entry in read_dir(gedent_home)? {
         print_descent_dir(entry.as_ref().unwrap().path(), gedent_home_len)?;
     }
     Ok(())
@@ -339,7 +391,7 @@ fn list_templates() -> Result<(), Error> {
 
 fn print_descent_dir(entry: PathBuf, gedent_home_len: usize) -> Result<(), Error> {
     if entry.is_dir() {
-        let new_dir = fs::read_dir(entry)?;
+        let new_dir = read_dir(entry)?;
         for new_entry in new_dir {
             let _ = print_descent_dir(new_entry.as_ref().unwrap().path(), gedent_home_len)?;
         }
@@ -363,7 +415,7 @@ fn get_template_path(template: String) -> Result<PathBuf, Error> {
 
 fn render_template(template_name: String, context: tera::Context) -> Result<String, Error> {
     let template_path = get_template_path(template_name)?;
-    let template = fs::read_to_string(&template_path)
+    let template = read_to_string(&template_path)
         .context(format!("Cant find template {:?}", template_path))?;
     let result = Tera::one_off(&template, &context, true).context("Failed to render template.")?;
     Ok(result)
@@ -391,6 +443,6 @@ fn gedent_init(config: Option<String>) -> Result<(), Error> {
     create_dir(&gedent)?;
     create_dir(&templates)?;
     gedent.push(CONFIG_NAME);
-    std::fs::copy(config_path, gedent)?;
+    copy(config_path, gedent)?;
     Ok(())
 }
