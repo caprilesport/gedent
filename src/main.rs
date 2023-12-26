@@ -151,15 +151,15 @@ fn main() -> Result<()> {
         }
 
         Mode::Config { config_subcommand } => match config_subcommand {
-            ConfigSubcommand::Print {} => {}
-            ConfigSubcommand::Set { key, value } => {}
+            ConfigSubcommand::Print { location } => print_config(location)?,
+            ConfigSubcommand::Set { key, value } => set_config(key, value)?,
             ConfigSubcommand::Add {
                 key,
                 value,
                 type_of_value,
-            } => {}
-            ConfigSubcommand::Del { key } => {}
-            ConfigSubcommand::Edit {} => {}
+            } => add_config(key, value, type_of_value)?,
+            ConfigSubcommand::Del { key } => delete_config()?,
+            ConfigSubcommand::Edit {} => edit_config()?,
         },
 
         Mode::Template {
