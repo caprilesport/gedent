@@ -1,7 +1,9 @@
-#![allow(unused_variables)]
+#![allow(unused_variables, unused_imports)]
 use anyhow::{anyhow, Context, Error, Result};
 use clap::{Parser, Subcommand, ValueEnum};
-use std::{fs, path::PathBuf};
+use std::fs;
+use std::fs::create_dir;
+use std::path::PathBuf;
 use tera::Tera;
 use toml::{Table, Value};
 
@@ -161,23 +163,13 @@ fn main() -> Result<()> {
             TemplateSubcommand::Edit { template } => edit_template(template)?,
         },
 
-        Mode::Init { config } => {
-            if let Some(config) = config {
-                println!(
-                    "Initiated gedent project with {} as config at .gedent",
-                    config
-                );
-            } else {
-                println!("Initiated gedent project at .gedent");
-            }
-        }
+        Mode::Init { config } => gedent_init(config)?,
     };
 
     Ok(())
 }
 
 // Config functionality
-
 fn parse_config(config_path: PathBuf) -> Result<toml::map::Map<String, Value>, anyhow::Error> {
     let config_file = std::fs::read_to_string(&config_path)
         .context(format!("Cant open config {:?}", config_path))?;
@@ -306,4 +298,29 @@ fn render_template(template_name: String, context: tera::Context) -> Result<Stri
         .context(format!("Cant find template {:?}", template_path))?;
     let result = Tera::one_off(&template, &context, true).context("Failed to render template.")?;
     Ok(result)
+}
+
+fn gedent_init(config: Option<String>) -> Result<(), Error> {
+    let mut config_path = PathBuf::new();
+    match config {
+        Some(file) => config_path.push(file),
+        None => {
+            config_path.push(get_gedent_home()?);
+            config_path.push(String::from("gedent.toml"));
+        }
+    };
+
+    if std::path::Path::try_exists(PathBuf::from(&".gedent").as_path())? {
+        anyhow::bail!(".gedent already exists, exiting...");
+    }
+
+    let mut gedent = PathBuf::from(&".gedent");
+    let mut templates = gedent.clone();
+    templates.push("templates");
+    create_dir(&gedent)?;
+    create_dir(&templates)?;
+    gedent.push(String::from("gedent.toml"));
+    std::fs::copy(config_path, gedent)?;
+
+    Ok(())
 }
