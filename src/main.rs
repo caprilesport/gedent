@@ -95,7 +95,12 @@ enum TemplateSubcommand {
 #[derive(Debug, Subcommand)]
 enum ConfigSubcommand {
     /// Prints the location and the currently used configuration
-    Print {},
+    #[command(alias = "p")]
+    Print {
+        /// Print the path of the printed config.
+        #[arg(short, long, default_value_t = false)]
+        location: bool,
+    },
     /// Sets key to value in the config file, keeps the same type as was setted.
     Set {
         /// Key to be added
@@ -118,7 +123,8 @@ enum ConfigSubcommand {
         /// Key to be deleted.
         key: String,
     },
-    /// Opens the config file in your default editor.
+    /// Opens the currently used config file in your default editor.
+    #[command(alias = "e")]
     Edit {},
 }
 
