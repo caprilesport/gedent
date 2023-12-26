@@ -7,6 +7,11 @@ use std::path::PathBuf;
 use tera::Tera;
 use toml::{Table, Value};
 
+const CONFIG_NAME: &str = "gedent.toml";
+const DIR_NAME: &str = ".gedent";
+const PRESETS_DIR: &str = "presets";
+const TEMPLATES_DIR: &str = "templates";
+
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 #[command(propagate_version = true)]
@@ -48,7 +53,7 @@ enum Mode {
         template_subcommand: TemplateSubcommand,
     },
     // Subcommand for init gedent "repo"
-    /// Initiate a gedent repository with config cloned from ~/.config/gedent
+    /// Initiate a gedent project in the current directory.
     Init {
         // optional config to create when initiating the gedent repo
         config: Option<String>,
@@ -170,7 +175,7 @@ fn main() -> Result<()> {
 }
 
 // Config functionality
-fn parse_config(config_path: PathBuf) -> Result<toml::map::Map<String, Value>, anyhow::Error> {
+fn parse_config(config_path: &PathBuf) -> Result<toml::map::Map<String, Value>, anyhow::Error> {
     let config_file = std::fs::read_to_string(&config_path)
         .context(format!("Cant open config {:?}", config_path))?;
     let config: Table = config_file.parse()?;
@@ -183,9 +188,8 @@ fn parse_config(config_path: PathBuf) -> Result<toml::map::Map<String, Value>, a
 fn get_config() -> Result<toml::map::Map<String, Value>, anyhow::Error> {
     let config_file = String::from("gedent.toml");
     let mut config_dir = get_config_dir()?;
-    config_dir.push(config_file);
-    let config = parse_config(config_dir)?;
-    Ok(config)
+    config_dir.push(CONFIG_NAME);
+    Ok(config_dir)
 }
 
 // TODO: implement git-like functionality
@@ -194,14 +198,41 @@ fn get_config_dir() -> Result<PathBuf, Error> {
     Ok(gedent_home)
 }
 
+fn edit_config() -> Result<(), Error> {
+    let config_path = get_config_path()?;
+    edit::edit_file(config_path)?;
+    Ok(())
+}
+
+fn print_config(location: bool) -> Result<(), Error> {
+    let config_path = get_config_path()?;
+    let config = fs::read_to_string(&config_path)?;
+    if location {
+        println!("Printing config from {:?}", config_path);
+    }
+    print!("{}", config);
+    Ok(())
+}
+
+fn delete_config() -> Result<(), Error> {
+    println!("Deleting config");
+    Ok(())
+}
+
+fn add_config(key: String, value: String, type_of_value: ArgType) -> Result<(), Error> {
+    println!(
+        "Setting config {} to {} with argtype {:?}",
+        key, value, type_of_value
+    );
+    Ok(())
+}
+
 fn get_gedent_home() -> Result<PathBuf, Error> {
+    let home_dir = std::env::var_os("HOME").ok_or(anyhow!("Error fetching home directory"))?;
     // TODO: make this system agnostic in the future - only works in linux
     // I saw a dir crate that may help
     // https://docs.rs/dirs/latest/dirs/fn.config_dir.html
-    let mut gedent_home = std::path::PathBuf::new();
-    let home_dir = std::env::var_os("HOME").ok_or(anyhow!("Error fetching home directory"))?;
-    gedent_home.push(home_dir);
-    gedent_home.push(String::from(".config/gedent"));
+    let gedent_home: PathBuf = [home_dir, Into::into(".config/gedent")].iter().collect();
     Ok(gedent_home)
 }
 
@@ -211,12 +242,13 @@ fn generate_template(
     options: Vec<String>,
     config: Option<PathBuf>,
 ) -> Result<(), Error> {
-    let cfg = get_config()?;
+    let config_path = get_config_path()?;
+    let config = parse_config(&config_path)?;
     let mut context = tera::Context::new();
 
     // Surprisingly, for me at least, passing toml::Value already works
-    // when using the typed values in TERA templates.
-    for (key, value) in cfg {
+    // out of the box when using the typed values in TERA templates.
+    for (key, value) in config {
         context.insert(key, &value);
     }
 
@@ -245,12 +277,17 @@ fn print_template(template: String) -> Result<(), Error> {
 // Basic logic is correct, would be nice if the user could set where these
 // directories are.
 fn new_template(software: String, template_name: String) -> Result<(), Error> {
-    let mut boilerplate = get_gedent_home()?;
-    let mut template_path = boilerplate.clone();
-    template_path.push(String::from("templates"));
-    template_path.push(template_name);
-    boilerplate.push(String::from("presets"));
-    boilerplate.push(software);
+    let gedent_home = get_gedent_home()?;
+    let template_path: PathBuf = [
+        gedent_home.clone(),
+        Into::into(TEMPLATES_DIR),
+        Into::into(&template_name),
+    ]
+    .iter()
+    .collect();
+    let boilerplate: PathBuf = [gedent_home, Into::into(PRESETS_DIR), Into::into(software)]
+        .iter()
+        .collect();
     fs::copy(&boilerplate, &template_path)
         .context(format!("Cant open base {:?} template.", &boilerplate))?;
     edit::edit_file(template_path).context("Cant open editor.")?;
@@ -258,8 +295,9 @@ fn new_template(software: String, template_name: String) -> Result<(), Error> {
 }
 
 fn list_templates() -> Result<(), Error> {
-    let mut gedent_home = get_gedent_home()?;
-    gedent_home.push(String::from("templates"));
+    let gedent_home: PathBuf = [get_gedent_home()?, Into::into(TEMPLATES_DIR)]
+        .iter()
+        .collect();
     // +1 is here to remove the first slash
     let gedent_home_len = gedent_home
         .to_str()
@@ -286,9 +324,13 @@ fn print_descent_dir(entry: PathBuf, gedent_home_len: usize) -> Result<(), Error
 }
 
 fn get_template_path(template: String) -> Result<PathBuf, Error> {
-    let mut template_path = get_gedent_home()?;
-    template_path.push(String::from("templates"));
-    template_path.push(template);
+    let template_path: PathBuf = [
+        get_gedent_home()?,
+        Into::into(TEMPLATES_DIR),
+        Into::into(template),
+    ]
+    .iter()
+    .collect();
     Ok(template_path)
 }
 
@@ -300,27 +342,28 @@ fn render_template(template_name: String, context: tera::Context) -> Result<Stri
     Ok(result)
 }
 
+// There may be a better way to write this?
 fn gedent_init(config: Option<String>) -> Result<(), Error> {
     let mut config_path = PathBuf::new();
     match config {
         Some(file) => config_path.push(file),
         None => {
             config_path.push(get_gedent_home()?);
-            config_path.push(String::from("gedent.toml"));
+            config_path.push(CONFIG_NAME);
         }
     };
 
-    if std::path::Path::try_exists(PathBuf::from(&".gedent").as_path())? {
+    let mut gedent = PathBuf::from(DIR_NAME);
+
+    if std::path::Path::try_exists(&gedent)? {
         anyhow::bail!(".gedent already exists, exiting...");
     }
 
-    let mut gedent = PathBuf::from(&".gedent");
     let mut templates = gedent.clone();
-    templates.push("templates");
+    templates.push(TEMPLATES_DIR);
     create_dir(&gedent)?;
     create_dir(&templates)?;
-    gedent.push(String::from("gedent.toml"));
+    gedent.push(CONFIG_NAME);
     std::fs::copy(config_path, gedent)?;
-
     Ok(())
 }
