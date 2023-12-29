@@ -6,6 +6,8 @@ use std::path::PathBuf;
 use tera::Tera;
 use toml::{Table, Value};
 
+pub mod molecule;
+
 const CONFIG_NAME: &str = "gedent.toml";
 const DIR_NAME: &str = ".gedent";
 const PRESETS_DIR: &str = "presets";
