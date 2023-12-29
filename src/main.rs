@@ -114,7 +114,7 @@ enum ConfigSubcommand {
         /// Value associated with key, can be a string, int, float or bool. Default is string.
         value: String,
         /// Sets the type of the value in the config file
-        #[arg(short, long)]
+        #[arg(short, long, default_value = "string")]
         type_of_value: ArgType,
     },
     /// Deletes a certain key in the configuration
@@ -318,10 +318,14 @@ fn print_config(location: bool) -> Result<(), Error> {
 // Template functionality
 fn generate_template(
     template: String,
-    options: Vec<String>,
+    _options: Vec<String>,
     config: Option<PathBuf>,
 ) -> Result<(), Error> {
-    let config_path = get_config_path()?;
+    let config_path = match config {
+        Some(config_path) => config_path,
+        None => get_config_path()?,
+    };
+
     let config = parse_config(&config_path)?;
     let mut context = tera::Context::new();
 
@@ -422,6 +426,7 @@ fn render_template(template_name: String, context: tera::Context) -> Result<Stri
 }
 
 // There may be a better way to write this?
+// Decide if there will be templates here - inclined to no for now.
 fn gedent_init(config: Option<String>) -> Result<(), Error> {
     let mut config_path = PathBuf::new();
     match config {
@@ -438,10 +443,10 @@ fn gedent_init(config: Option<String>) -> Result<(), Error> {
         anyhow::bail!(".gedent already exists, exiting...");
     }
 
-    let mut templates = gedent.clone();
-    templates.push(TEMPLATES_DIR);
+    // let mut templates = gedent.clone();
+    // templates.push(TEMPLATES_DIR);
     create_dir(&gedent)?;
-    create_dir(&templates)?;
+    // create_dir(&templates)?;
     gedent.push(CONFIG_NAME);
     copy(config_path, gedent)?;
     Ok(())
