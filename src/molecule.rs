@@ -1,70 +1,105 @@
-// #![allow(dead_code, unused_variables, unused_imports)]
-
 use anyhow::{anyhow, Context, Error, Result};
 use std::path::PathBuf;
 
-#[derive(Debug)]
+// compiler warns that i dont "need" the atom type as im not actually doing anything with it
+// but for know i think it makes the code more readable (molecules are made of atoms)
+#[derive(Debug, Clone)]
 struct Atom {
-    element: String,
-    coords: Vec<f32>,
+    _element: String,
+    _coords: Vec<f64>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Molecule {
     atoms: Vec<Atom>,
 }
 
 impl Molecule {
-    pub fn new() -> Molecule {
+    fn new() -> Molecule {
         return Molecule { atoms: Vec::new() };
     }
 
-    pub fn from_xyz(xyz_path: &PathBuf) -> Result<Molecule, Error> {
+    // returns a vec because we support a file with multiple xyz
+    pub fn from_xyz(xyz_path: &PathBuf) -> Result<Vec<Molecule>, Error> {
         Ok(parse_xyz(xyz_path)?)
+    }
+
+    pub fn split(&self, index: usize) -> Result<(Molecule, Molecule), Error> {
+        if index >= self.atoms.len() {
+            anyhow::bail!("Index given bigger than size of molecule, exiting...")
+        }
+        let mut molecule1 = Molecule::new();
+        let mut molecule2 = Molecule::new();
+
+        molecule1.atoms = self.atoms[0..index].to_vec();
+        molecule2.atoms = self.atoms[index..].to_vec();
+        Ok((molecule1, molecule2))
     }
 }
 
-fn print_type_of<T>(_: &T) {
-    println!("{}", std::any::type_name::<T>())
+fn parse_atom(line: &str) -> Result<Atom, Error> {
+    let line_split = line
+        .trim()
+        .split_whitespace()
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>();
+    let element = line_split[0];
+    let coords: Result<Vec<f64>, Error> = line_split[1..]
+        .iter()
+        .map(|x| x.parse::<f64>().context("Cant parse float"))
+        .collect();
+    let atom = Atom {
+        _element: element.to_string(),
+        _coords: coords?,
+    };
+    Ok(atom)
 }
 
-fn parse_xyz(xyz_path: &PathBuf) -> Result<Molecule, Error> {
+fn is_natoms(peeked: &&str) -> bool {
+    return peeked.parse::<i64>().is_ok();
+}
+
+// the check for atom length got kinda ugly.. see if there is some smarter way to do this
+fn parse_xyz(xyz_path: &PathBuf) -> Result<Vec<Molecule>, Error> {
     let xyz_file = std::fs::read_to_string(xyz_path)?;
-    let xyz_splitted_lines: Vec<_> = xyz_file
-        .lines()
-        .map(|line| {
-            line.trim()
-                .split_whitespace()
-                .filter(|s| !s.is_empty())
-                .collect::<Vec<_>>()
-        })
-        .collect();
-    let n: usize = xyz_splitted_lines[0][0].parse()?;
-    let atoms = &xyz_splitted_lines[2..];
+    let mut xyz_lines = xyz_file.lines().peekable();
+    let mut molecules: Vec<Molecule> = vec![];
+    let mut mol = Molecule::new();
+    let mut natoms = 0;
 
-    let mut molecule = Molecule::new();
-    // is there a way to remove this for loop? python old habits
-    for line in atoms {
-        let element = line[0].to_string();
-        let coords: Result<Vec<f32>, Error> = line[1..]
-            .iter()
-            .map(|x| x.parse::<f32>().context("Cant parse float"))
-            .collect();
-
-        // this boilerplate is also kinda ugly, need to study more
-        // to learn to deal with results in iterators
-        let coords = match coords {
-            Ok(coord) => coord,
-            _ => {
-                anyhow::bail!("Failed to parse a float in xyz coordinates, exiting...")
+    loop {
+        if xyz_lines.peek().is_none() {
+            if mol.atoms.len() != natoms {
+                anyhow::bail!(
+                    "Expected {} atoms found {}, exiting...",
+                    natoms,
+                    mol.atoms.len()
+                )
             }
-        };
-        molecule.atoms.push(Atom { element, coords });
+            molecules.push(mol.clone());
+            break;
+        }
 
-        if !n.eq(&molecule.atoms.len()) {
-            anyhow::bail!("Expected {} atoms, found {}.", n, &molecule.atoms.len())
+        if is_natoms(xyz_lines.peek().unwrap()) {
+            if !mol.atoms.is_empty() {
+                if mol.atoms.len() != natoms {
+                    anyhow::bail!(
+                        "Expected {} atoms found {}, exiting...",
+                        natoms,
+                        mol.atoms.len()
+                    )
+                }
+                natoms -= natoms; // set to 0 again
+                molecules.push(mol.clone());
+            }
+
+            natoms += xyz_lines.next().unwrap().parse::<usize>()?;
+            let _comment = xyz_lines.next().unwrap();
+            mol.atoms.clear();
+        } else {
+            mol.atoms.push(parse_atom(xyz_lines.next().unwrap())?);
         }
     }
 
-    Ok(molecule)
+    Ok(molecules)
 }
