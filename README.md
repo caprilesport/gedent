@@ -15,6 +15,10 @@ use case in mind, it is a template CLI combined with a user defined configuratio
 so if you find another use for it, feel free to open a pull request with 
 functionalities that support your needs.
 
+## Is it any good?
+
+[Yes.](https://news.ycombinator.com/item?id=3067434)
+
 ## Installation
 
 ## Configuration
