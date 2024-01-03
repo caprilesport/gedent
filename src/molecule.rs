@@ -1,10 +1,9 @@
 #![allow(dead_code, unused_variables, unused_imports)]
 use anyhow::{anyhow, Context, Error, Result};
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-// compiler warns that i dont "need" the atom type as im not actually doing anything with it
-// but for know i think it makes the code more readable (molecules are made of atoms)
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Molecule {
     filename: String,
     annotations: String,
