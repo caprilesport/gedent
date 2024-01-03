@@ -320,28 +320,46 @@ fn print_config(location: bool) -> Result<(), Error> {
 // Template functionality
 fn generate_template(
     template: String,
-    _options: Vec<String>,
+    xyz_files: Vec<String>,
     config: Option<PathBuf>,
 ) -> Result<(), Error> {
     let config_path = match config {
         Some(config_path) => config_path,
         None => get_config_path()?,
     };
-
-    let config = parse_config(&config_path)?;
     let mut context = tera::Context::new();
 
-    // Surprisingly, for me at least, passing toml::Value already works
-    // out of the box when using the typed values in TERA templates.
+    let config = parse_config(&config_path)?;
     for (key, value) in config {
         context.insert(key, &value);
     }
+    let template_path = get_template_path(template)?;
+    let raw_template = read_to_string(&template_path)
+        .context(format!("Cant find template {:?}", template_path))?;
+    let (template, required) = parse_template(raw_template)?;
 
-    // TODO: parse template to see if xyz file is needed
+    println!("{:?}", xyz_files);
+
+    let mut tera = Tera::default();
+    tera.add_raw_template("template", &template)?;
+    let result = tera.render("template", &context)?;
 
     let result = render_template(template, context)?;
     print!("{}", &result);
     Ok(())
+}
+
+fn parse_template(template: String) -> Result<(String, usize), Error> {
+    let split: Vec<_> = template.split("\n").collect();
+    let require_line = &split[0].rfind("required:");
+    match require_line {
+        Some(index) => {
+            let template = split[1..].join("\n");
+            let required = split[0].split(" ").collect::<Vec<_>>()[2].parse::<usize>()?;
+            Ok((template, required))
+        }
+        None => return Ok((split.join("\n"), 0)),
+    }
 }
 
 fn edit_template(template: String) -> Result<(), Error> {
@@ -417,14 +435,6 @@ fn get_template_path(template: String) -> Result<PathBuf, Error> {
     .iter()
     .collect();
     Ok(template_path)
-}
-
-fn render_template(template_name: String, context: tera::Context) -> Result<String, Error> {
-    let template_path = get_template_path(template_name)?;
-    let template = read_to_string(&template_path)
-        .context(format!("Cant find template {:?}", template_path))?;
-    let result = Tera::one_off(&template, &context, true).context("Failed to render template.")?;
-    Ok(result)
 }
 
 // There may be a better way to write this?

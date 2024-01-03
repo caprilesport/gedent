@@ -1,3 +1,4 @@
+{# required: 1 #}
 ! {{ dft_level }} {{ dft_basis_set }} 
 ! Opt freq D3BJ
 
@@ -23,4 +24,4 @@ end
 
 {% endif -%} 
 
-*xyzfile {{ charge }} {{ mult }} {{ xyz_file }}
+*xyz {{ charge }} {{ mult }}
