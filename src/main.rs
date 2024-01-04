@@ -1,12 +1,14 @@
-#![allow(unused_variables, unused_imports)]
+#![allow(dead_code, unused_variables, unused_imports)]
+use crate::molecule::Molecule;
 use anyhow::{anyhow, Context, Error, Result};
 use clap::{Parser, Subcommand, ValueEnum};
+use serde::{Deserialize, Serialize};
 use std::fs::{copy, create_dir, read_dir, read_to_string, write};
 use std::path::PathBuf;
 use tera::Tera;
 use toml::{Table, Value};
 
-pub mod molecule;
+mod molecule;
 
 const CONFIG_NAME: &str = "gedent.toml";
 const DIR_NAME: &str = ".gedent";
