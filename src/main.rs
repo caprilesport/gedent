@@ -33,10 +33,10 @@ enum Mode {
         // Last arguments are the required xyz files
         // TODO: Make this a flag
         /// xyz files
-        #[arg(last = true)]
-        xyz_files: Vec<String>,
+        #[arg(value_name = "XYZ files")]
+        xyz_files: Option<Vec<PathBuf>>,
         /// Sets a custom config file
-        #[arg(short, long, value_name = "FILE")]
+        #[arg(short, long, value_name = "File")]
         config: Option<PathBuf>,
     },
     // Subcommand to deal with configurations
@@ -138,9 +138,11 @@ enum ArgType {
     Bool,
 }
 
+// this can be expanded in the future, i dont know if there will be more useful stuff
+// that could be in a metada section for the input. i though requiring different molecules
+// could be nice, but thats quite a boring implementation for now, in the future i might come back
 #[derive(Clone, Debug, Default, Deserialize)]
 struct TemplateOptions {
-    required_files: Option<usize>,
     extension: Option<String>,
 }
 
@@ -323,9 +325,10 @@ fn print_config(location: bool) -> Result<(), Error> {
 }
 
 // Template functionality
+// TODO: refactor this little guy
 fn generate_template(
     template: String,
-    xyz_files: Vec<String>,
+    xyz_files: Option<Vec<PathBuf>>,
     config: Option<PathBuf>,
 ) -> Result<(), Error> {
     let config_path = match config {
@@ -345,14 +348,40 @@ fn generate_template(
         .context(format!("Cant find template {:?}", template_path))?;
     let (parsed_template, opts) = parse_template(raw_template)?;
 
-    println!("{:?}", xyz_files);
+    let extension = match opts.extension {
+        Some(ext) => ext,
+        None => "inp".to_string(),
+    };
 
     let mut tera = Tera::default();
     tera.add_raw_template("template", &parsed_template)?;
+    // tera.register_function(, ); split returns the two splitted molecules
+    // tera.register_function(, ); print returns a string with the xyz structure of the molecule
 
-    let result = tera.render("template", &context)?;
+    let (n, xyzfiles) = match xyz_files {
+        Some(files) => (files.len(), files),
+        None => {
+            let result = tera.render("template", &context)?;
+            print!("{}", &result);
+            (0, vec![]) //then we just ignore the loop
+        }
+    };
 
-    print!("{}", &result);
+    for index in 0..n {
+        let mut molecules = Molecule::from_xyz(&xyzfiles[index])?;
+        loop {
+            if molecules.len() == 0 {
+                break;
+            } else {
+                let molecule = molecules.pop();
+                context.insert("molecule", &molecule);
+                println!("{:?}", context);
+                let result = tera.render("template", &context)?;
+                print!("{}", &result);
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -379,7 +408,8 @@ fn parse_template(file: String) -> Result<(String, TemplateOptions), Error> {
     }
     template = template.replacen("\n", "", 1); //remove first empty line
 
-    let template_opts: TemplateOptions = toml::from_str(&options).context(":D")?;
+    let template_opts: TemplateOptions =
+        toml::from_str(&options).context("Failed to parse extension in template header")?;
     Ok((template, template_opts))
 }
 
