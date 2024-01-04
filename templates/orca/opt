@@ -1,4 +1,7 @@
-{# required: 1 #}
+---
+required_files = 1
+extension = "inp"
+---
 ! {{ dft_level }} {{ dft_basis_set }} 
 ! Opt freq D3BJ
 
