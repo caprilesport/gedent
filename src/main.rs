@@ -138,6 +138,12 @@ enum ArgType {
     Bool,
 }
 
+#[derive(Clone, Debug, Default, Deserialize)]
+struct TemplateOptions {
+    required_files: Option<usize>,
+    extension: Option<String>,
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -191,8 +197,7 @@ fn get_gedent_home() -> Result<PathBuf, Error> {
     Ok(gedent_home)
 }
 
-// git-like search, stop if .gedent folder is found or if
-// parent_folder = current_folder
+// git-like search, stop if .gedent folder is found or if dir.parent = none
 fn find_gedent_folder(dir: PathBuf) -> Result<PathBuf, Error> {
     let mut gedent = dir.clone();
     gedent.push(DIR_NAME);
@@ -327,39 +332,55 @@ fn generate_template(
         Some(config_path) => config_path,
         None => get_config_path()?,
     };
+
     let mut context = tera::Context::new();
 
     let config = parse_config(&config_path)?;
     for (key, value) in config {
         context.insert(key, &value);
     }
+
     let template_path = get_template_path(template)?;
     let raw_template = read_to_string(&template_path)
         .context(format!("Cant find template {:?}", template_path))?;
-    let (template, required) = parse_template(raw_template)?;
+    let (parsed_template, opts) = parse_template(raw_template)?;
 
     println!("{:?}", xyz_files);
 
     let mut tera = Tera::default();
-    tera.add_raw_template("template", &template)?;
+    tera.add_raw_template("template", &parsed_template)?;
+
     let result = tera.render("template", &context)?;
 
-    let result = render_template(template, context)?;
     print!("{}", &result);
     Ok(())
 }
 
-fn parse_template(template: String) -> Result<(String, usize), Error> {
-    let split: Vec<_> = template.split("\n").collect();
-    let require_line = &split[0].rfind("required:");
-    match require_line {
-        Some(index) => {
-            let template = split[1..].join("\n");
-            let required = split[0].split(" ").collect::<Vec<_>>()[2].parse::<usize>()?;
-            Ok((template, required))
+fn parse_template(file: String) -> Result<(String, TemplateOptions), Error> {
+    let mut lines = file.lines().peekable();
+    let mut options = "".to_string();
+    let mut template = "".to_string();
+
+    loop {
+        let next = lines.next();
+        if next.is_none() {
+            break;
+        } else if next.unwrap().contains("---") {
+            loop {
+                if lines.peek().unwrap().contains("---") {
+                    let _ = lines.next();
+                    break;
+                }
+                options = [options, lines.next().unwrap().to_string()].join("\n");
+            }
+        } else {
+            template = [template, next.unwrap().to_string()].join("\n");
         }
-        None => return Ok((split.join("\n"), 0)),
     }
+    template = template.replacen("\n", "", 1); //remove first empty line
+
+    let template_opts: TemplateOptions = toml::from_str(&options).context(":D")?;
+    Ok((template, template_opts))
 }
 
 fn edit_template(template: String) -> Result<(), Error> {
