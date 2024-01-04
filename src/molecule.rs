@@ -1,4 +1,4 @@
-#![allow(dead_code, unused_variables, unused_imports)]
+// #![allow(dead_code, unused_variables, unused_imports)]
 use anyhow::{anyhow, Context, Error, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -35,11 +35,18 @@ impl Molecule {
 
     // returns a vec because we support a file with multiple xyz
     // the check for atom length got kinda ugly.. see if there is some smarter way to do this
-    pub fn from_xyz(xyz_path: &PathBuf) -> Result<Vec<Molecule>, Error> {
-        let xyz_file = std::fs::read_to_string(xyz_path)?;
+    pub fn from_xyz(mut xyz_path: PathBuf) -> Result<Vec<Molecule>, Error> {
+        let xyz_file = std::fs::read_to_string(&xyz_path)?;
+        xyz_path.set_extension("");
+        let name = String::from(
+            xyz_path
+                .to_str()
+                .ok_or(anyhow!("Cant convert path of xyz file to name"))?,
+        );
         let mut xyz_lines = xyz_file.lines().peekable();
         let mut molecules: Vec<Molecule> = vec![];
         let mut mol = Molecule::new();
+        mol.filename = name;
         let mut natoms = 0;
 
         loop {
