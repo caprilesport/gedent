@@ -1,5 +1,4 @@
 ---
-required_files = 1
 extension = "inp"
 ---
 ! {{ dft_level }} {{ dft_basis_set }} 
@@ -28,3 +27,4 @@ end
 {% endif -%} 
 
 *xyz {{ charge }} {{ mult }}
+{{ molecule.atoms.1 }}
