@@ -572,3 +572,63 @@ fn gedent_init(config: Option<String>) -> Result<(), Error> {
     copy(config_path, gedent)?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn verify_cli() {
+        use clap::CommandFactory;
+
+        Cli::command().debug_assert();
+    }
+
+    #[test]
+    fn config_add_key_works() {
+        let mut final_config = Map::new();
+        final_config.insert("testkey".to_string(), Value::Boolean(false));
+        let config = Map::new();
+        match add_config(
+            "testkey".to_string(),
+            "false".to_string(),
+            ArgType::Bool,
+            config,
+        ) {
+            Ok(val) => assert_eq!(val, final_config),
+            Err(_) => core::panic!("Test failed to add key"),
+        }
+    }
+
+    #[test]
+    fn config_edit_key_works() {
+        let mut final_config = Map::new();
+        final_config.insert("testkey".to_string(), Value::Boolean(false));
+        let mut config = Map::new();
+        config.insert("testkey".to_string(), Value::Boolean(true));
+        match set_config("testkey".to_string(), "false".to_string(), config) {
+            Ok(conf) => assert_eq!(final_config, conf),
+            Err(_) => core::panic!("Test failed to set key"),
+        }
+    }
+
+    #[test]
+    fn config_del_key_works() {
+        let final_config = Map::new();
+        let mut config = Map::new();
+        config.insert("testkey".to_string(), Value::Boolean(true));
+        match delete_config("testkey".to_string(), config) {
+            Ok(conf) => assert_eq!(final_config, conf),
+            Err(_) => core::panic!("Test failed to delete key"),
+        }
+    }
+
+    // fns to have tests written:
+    // configurations
+    // is there a way to guarantee fns that depend on filesystem to be tested?
+
+    // templates - need a rewrite, trying to write tests enforce this
+    // parsing
+    // generating
+    //
+}
