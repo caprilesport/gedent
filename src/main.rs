@@ -2,11 +2,11 @@
 use crate::molecule::Molecule;
 use anyhow::{anyhow, Context, Error, Result};
 use clap::{Parser, Subcommand, ValueEnum};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::fs::{copy, create_dir, read_dir, read_to_string, write};
 use std::path::PathBuf;
 use tera::Tera;
-use toml::{Table, Value};
+use toml::{map::Map, Table, Value};
 
 mod molecule;
 
@@ -22,6 +22,27 @@ struct Cli {
     #[command(subcommand)]
     mode: Mode,
 }
+
+// #[derive(Clone, Debug)]
+// struct Template {
+//     path: PathBuf,
+//     raw_content: String,
+//     parsed_template: String,
+// }
+
+// this can be expanded in the future, i dont know if there will be more useful stuff
+// that could be in a metada section for the input. i though requiring different molecules
+// could be nice, but thats quite a boring implementation for now, in the future i might come back
+#[derive(Clone, Debug, Default, Deserialize)]
+struct TemplateOptions {
+    extension: Option<String>,
+}
+
+// #[derive(Clone, Debug)]
+// struct Config {
+//     path: PathBuf,
+//     content: Map<String, Value>,
+// }
 
 #[derive(Debug, Subcommand)]
 enum Mode {
@@ -140,14 +161,6 @@ enum ArgType {
     Bool,
 }
 
-// this can be expanded in the future, i dont know if there will be more useful stuff
-// that could be in a metada section for the input. i though requiring different molecules
-// could be nice, but thats quite a boring implementation for now, in the future i might come back
-#[derive(Clone, Debug, Default, Deserialize)]
-struct TemplateOptions {
-    extension: Option<String>,
-}
-
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -163,13 +176,28 @@ fn main() -> Result<()> {
 
         Mode::Config { config_subcommand } => match config_subcommand {
             ConfigSubcommand::Print { location } => print_config(location)?,
-            ConfigSubcommand::Set { key, value } => set_config(key, value)?,
+            ConfigSubcommand::Set { key, value } => {
+                let config_path = get_config_path()?;
+                let config = load_config(&config_path)?;
+                let config = set_config(key, value, config)?;
+                write_config(config_path, config)?
+            }
             ConfigSubcommand::Add {
                 key,
                 value,
                 type_of_value,
-            } => add_config(key, value, type_of_value)?,
-            ConfigSubcommand::Del { key } => delete_config(key)?,
+            } => {
+                let config_path = get_config_path()?;
+                let config = load_config(&config_path)?;
+                let config = add_config(key, value, type_of_value, config)?;
+                write_config(config_path, config)?
+            }
+            ConfigSubcommand::Del { key } => {
+                let config_path = get_config_path()?;
+                let config = load_config(&config_path)?;
+                let config = delete_config(key, config)?;
+                write_config(config_path, config)?
+            }
             ConfigSubcommand::Edit {} => edit_config()?,
         },
 
@@ -218,38 +246,60 @@ fn find_gedent_folder(dir: PathBuf) -> Result<PathBuf, Error> {
 }
 
 // Config functionality
-fn parse_config(config_path: &PathBuf) -> Result<toml::map::Map<String, Value>, anyhow::Error> {
+// Can i test this somehow, or is it useless?
+// Same applies to all functions that receive a pathbuf, should decouple whenever possible
+fn load_config(config_path: &PathBuf) -> Result<Map<String, Value>, anyhow::Error> {
     let config_file =
         read_to_string(&config_path).context(format!("Cant open config {:?}", config_path))?;
     let config: Table = config_file.parse()?;
     Ok(config)
 }
 
-fn write_config(config_path: PathBuf, config: toml::map::Map<String, Value>) -> Result<(), Error> {
+fn edit_config() -> Result<(), Error> {
+    let config_path = get_config_path()?;
+    edit::edit_file(config_path)?;
+    Ok(())
+}
+
+// I can decouple thid fn from the Path, but maybe it's not worth it,
+// as it does not have a return value
+fn print_config(location: bool) -> Result<(), Error> {
+    let config_path = get_config_path()?;
+    let config = read_to_string(&config_path)?;
+    if location {
+        println!("Printing config from {:?}", config_path);
+    }
+    print!("{}", config);
+    Ok(())
+}
+
+fn write_config(config_path: PathBuf, config: Map<String, Value>) -> Result<(), Error> {
     write(&config_path, config.to_string())?;
     println!("Config wrote to {:?}.", config_path);
     Ok(())
 }
 
+// After this function everything should be decoupled from the config path
 fn get_config_path() -> Result<PathBuf, Error> {
     let current_dir = std::env::current_dir()?;
     let config = PathBuf::from(CONFIG_NAME);
     Ok([find_gedent_folder(current_dir)?, config].iter().collect())
 }
 
-fn delete_config(key: String) -> Result<(), Error> {
-    let config_path = get_config_path()?;
-    let mut config = parse_config(&config_path)?;
-    config.remove(&key);
+fn delete_config(key: String, mut config: Map<String, Value>) -> Result<Map<String, Value>, Error> {
+    config
+        .remove(&key)
+        .ok_or(anyhow!("Failed to remove key, not found."))?;
     println!("Removed key {}.", key);
-    write_config(config_path, config)?;
-    Ok(())
+    Ok(config)
 }
 
-fn add_config(key: String, value: String, type_of_value: ArgType) -> Result<(), Error> {
-    let config_path = get_config_path()?;
-    let mut config = parse_config(&config_path)?;
-
+fn add_config(
+    key: String,
+    value: String,
+    type_of_value: ArgType,
+    mut config: Map<String, Value>,
+) -> Result<Map<String, Value>, Error> {
     if config.contains_key(&key) {
         anyhow::bail!(format!("Config already contains {}, exiting.", key));
     }
@@ -274,13 +324,14 @@ fn add_config(key: String, value: String, type_of_value: ArgType) -> Result<(), 
         }
     }
 
-    write_config(config_path, config)?;
-    Ok(())
+    Ok(config)
 }
 
-fn set_config(key: String, value: String) -> Result<(), Error> {
-    let config_path = get_config_path()?;
-    let mut config = parse_config(&config_path)?;
+fn set_config(
+    key: String,
+    value: String,
+    mut config: Map<String, Value>,
+) -> Result<Map<String, Value>, Error> {
     let current_value = config
         .get(&key)
         .ok_or(anyhow!("Cant find {} in config.", key))?;
@@ -306,24 +357,7 @@ fn set_config(key: String, value: String) -> Result<(), Error> {
         _ => anyhow::bail!("Unsupported type"),
     }
 
-    write_config(config_path, config)?;
-    Ok(())
-}
-
-fn edit_config() -> Result<(), Error> {
-    let config_path = get_config_path()?;
-    edit::edit_file(config_path)?;
-    Ok(())
-}
-
-fn print_config(location: bool) -> Result<(), Error> {
-    let config_path = get_config_path()?;
-    let config = read_to_string(&config_path)?;
-    if location {
-        println!("Printing config from {:?}", config_path);
-    }
-    print!("{}", config);
-    Ok(())
+    Ok(config)
 }
 
 // Template functionality
@@ -339,7 +373,7 @@ fn generate_template(
     };
 
     let mut context = tera::Context::new();
-    let config = parse_config(&config_path)?;
+    let config = load_config(&config_path)?;
     for (key, value) in config {
         context.insert(key, &value);
     }
