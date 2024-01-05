@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Molecule {
-    filename: String,
+    pub filename: String,
     annotations: String,
     atoms: Vec<String>,
 }
@@ -35,9 +35,9 @@ impl Molecule {
 
     // returns a vec because we support a file with multiple xyz
     // the check for atom length got kinda ugly.. see if there is some smarter way to do this
-    pub fn from_xyz(xyz_path: &PathBuf) -> Result<Vec<Molecule>, Error> {
+    pub fn from_xyz(mut xyz_path: PathBuf) -> Result<Vec<Molecule>, Error> {
         let xyz_file = std::fs::read_to_string(&xyz_path)?;
-        // xyz_path.set_extension("");
+        xyz_path.set_extension("");
         let name = String::from(
             xyz_path
                 .to_str()
@@ -46,8 +46,9 @@ impl Molecule {
         let mut xyz_lines = xyz_file.lines().peekable();
         let mut molecules: Vec<Molecule> = vec![];
         let mut mol = Molecule::new();
-        mol.filename = name;
+        mol.filename = name.clone();
         let mut natoms = 0;
+        let mut counter = 0;
 
         loop {
             if xyz_lines.peek().is_none() {
@@ -58,6 +59,12 @@ impl Molecule {
                         mol.atoms.len()
                     )
                 }
+                match counter {
+                    0 => (),
+                    _ => {
+                        mol.filename = [name.clone(), counter.clone().to_string()].join("_");
+                    }
+                };
                 molecules.push(mol.clone());
                 break;
             }
@@ -72,7 +79,9 @@ impl Molecule {
                         )
                     }
                     natoms -= natoms; // set to 0 again
+                    mol.filename = [name.clone(), counter.clone().to_string()].join("_");
                     molecules.push(mol.clone());
+                    counter += 1;
                 }
 
                 natoms += xyz_lines.next().unwrap().parse::<usize>()?;

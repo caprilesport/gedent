@@ -339,56 +339,78 @@ fn generate_template(
     };
 
     let mut context = tera::Context::new();
-
     let config = parse_config(&config_path)?;
     for (key, value) in config {
         context.insert(key, &value);
     }
 
-    let template_path = get_template_path(template)?;
-    let raw_template = read_to_string(&template_path)
-        .context(format!("Cant find template {:?}", template_path))?;
-    let (parsed_template, opts) = parse_template(raw_template)?;
+    let results = render_template(template, context, xyz_files)?;
 
+    for i in results {
+        println!("template name: {} \n{}", i.1, i.0);
+    }
+
+    Ok(())
+}
+
+fn render_template(
+    template: String,
+    mut context: tera::Context,
+    xyz_files: Option<Vec<PathBuf>>,
+) -> Result<Vec<(String, String)>, Error> {
+    let (parsed_template, opts) = parse_template(&template)?;
     let extension = match opts.extension {
         Some(ext) => ext,
         None => "inp".to_string(),
     };
 
     let mut tera = Tera::default();
-    tera.add_raw_template("template", &parsed_template)?;
     // tera.register_function(, ); split returns the two splitted molecules
     // tera.register_function(, ); print returns a string with the xyz structure of the molecule
+    tera.add_raw_template("template", &parsed_template)?;
 
-    let (n, xyzfiles) = match xyz_files {
+    let mut result = vec![];
+
+    let (n, mut xyzfiles) = match xyz_files {
         Some(files) => (files.len(), files),
-        None => {
-            let result = tera.render("template", &context)?;
-            print!("{}", &result);
-            (0, vec![]) //then we just ignore the loop
-        }
+        None => (0, vec![]),
     };
 
-    for index in 0..n {
-        let mut molecules = Molecule::from_xyz(&xyzfiles[index])?;
-        loop {
-            if molecules.len() == 0 {
-                break;
-            } else {
+    if n == 0 {
+        result.push((
+            tera.render("template", &context)?,
+            [template, extension.clone()].join("."),
+        ));
+    } else {
+        // this loop is neccessary because there might be xyz files with
+        // multiple structures
+        for index in 0..n {
+            let mut molecules = Molecule::from_xyz(xyzfiles.pop().unwrap())?;
+            if molecules.len() != 1 {}
+            loop {
                 let molecule = molecules.pop();
-                context.insert("molecule", &molecule);
-                println!("{:?}", context);
-                let result = tera.render("template", &context)?;
-                print!("{}", &result);
+                match molecule {
+                    Some(mol) => {
+                        context.insert("molecule", &mol);
+                        result.push((
+                            tera.render("template", &context)?,
+                            [mol.filename, extension.clone()].join("."),
+                        ));
+                    }
+                    None => break,
+                }
             }
         }
     }
-
-    Ok(())
+    Ok(result)
 }
 
-fn parse_template(file: String) -> Result<(String, TemplateOptions), Error> {
-    let mut lines = file.lines().peekable();
+fn parse_template(template: &String) -> Result<(String, TemplateOptions), Error> {
+    let template_path = get_template_path(template)?;
+    let raw_template = read_to_string(&template_path)
+        .context(format!("Cant find template {:?}", template_path))?;
+
+    let mut lines = raw_template.lines().peekable();
     let mut options = "".to_string();
     let mut template = "".to_string();
 
@@ -416,14 +438,14 @@ fn parse_template(file: String) -> Result<(String, TemplateOptions), Error> {
 }
 
 fn edit_template(template: String) -> Result<(), Error> {
-    let template_path = get_template_path(template)?;
+    let template_path = get_template_path(&template)?;
     // The edit crate makes this work in all platforms.
     edit::edit_file(template_path)?;
     Ok(())
 }
 
 fn print_template(template: String) -> Result<(), Error> {
-    let template_path = get_template_path(template)?;
+    let template_path = get_template_path(&template)?;
     let template = read_to_string(&template_path)
         .context(format!("Cant find template {:?}", template_path))?;
     println!("{}", &template);
@@ -479,7 +501,7 @@ fn print_descent_dir(entry: PathBuf, gedent_home_len: usize) -> Result<(), Error
     }
 }
 
-fn get_template_path(template: String) -> Result<PathBuf, Error> {
+fn get_template_path(template: &String) -> Result<PathBuf, Error> {
     let template_path: PathBuf = [
         get_gedent_home()?,
         Into::into(TEMPLATES_DIR),
