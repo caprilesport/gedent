@@ -1,12 +1,14 @@
-#![allow(unused_variables, unused_imports)]
+#![allow(dead_code, unused_variables, unused_imports)]
+use crate::molecule::Molecule;
 use anyhow::{anyhow, Context, Error, Result};
 use clap::{Parser, Subcommand, ValueEnum};
+use serde::{Deserialize, Serialize};
 use std::fs::{copy, create_dir, read_dir, read_to_string, write};
 use std::path::PathBuf;
 use tera::Tera;
 use toml::{Table, Value};
 
-pub mod molecule;
+mod molecule;
 
 const CONFIG_NAME: &str = "gedent.toml";
 const DIR_NAME: &str = ".gedent";
@@ -33,10 +35,10 @@ enum Mode {
         // Last arguments are the required xyz files
         // TODO: Make this a flag
         /// xyz files
-        #[arg(last = true)]
-        xyz_files: Vec<String>,
+        #[arg(value_name = "XYZ files")]
+        xyz_files: Option<Vec<PathBuf>>,
         /// Sets a custom config file
-        #[arg(short, long, value_name = "FILE")]
+        #[arg(short, long, value_name = "File")]
         config: Option<PathBuf>,
     },
     // Subcommand to deal with configurations
@@ -138,6 +140,14 @@ enum ArgType {
     Bool,
 }
 
+// this can be expanded in the future, i dont know if there will be more useful stuff
+// that could be in a metada section for the input. i though requiring different molecules
+// could be nice, but thats quite a boring implementation for now, in the future i might come back
+#[derive(Clone, Debug, Default, Deserialize)]
+struct TemplateOptions {
+    extension: Option<String>,
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -191,8 +201,7 @@ fn get_gedent_home() -> Result<PathBuf, Error> {
     Ok(gedent_home)
 }
 
-// git-like search, stop if .gedent folder is found or if
-// parent_folder = current_folder
+// git-like search, stop if .gedent folder is found or if dir.parent = none
 fn find_gedent_folder(dir: PathBuf) -> Result<PathBuf, Error> {
     let mut gedent = dir.clone();
     gedent.push(DIR_NAME);
@@ -318,9 +327,10 @@ fn print_config(location: bool) -> Result<(), Error> {
 }
 
 // Template functionality
+// TODO: refactor this little guy
 fn generate_template(
     template: String,
-    _options: Vec<String>,
+    xyz_files: Option<Vec<PathBuf>>,
     config: Option<PathBuf>,
 ) -> Result<(), Error> {
     let config_path = match config {
@@ -328,31 +338,114 @@ fn generate_template(
         None => get_config_path()?,
     };
 
-    let config = parse_config(&config_path)?;
     let mut context = tera::Context::new();
-
-    // Surprisingly, for me at least, passing toml::Value already works
-    // out of the box when using the typed values in TERA templates.
+    let config = parse_config(&config_path)?;
     for (key, value) in config {
         context.insert(key, &value);
     }
 
-    // TODO: parse template to see if xyz file is needed
+    let results = render_template(template, context, xyz_files)?;
 
-    let result = render_template(template, context)?;
-    print!("{}", &result);
+    for i in results {
+        println!("template name: {} \n{}", i.1, i.0);
+    }
+
     Ok(())
 }
 
-fn edit_template(template: String) -> Result<(), Error> {
+fn render_template(
+    template: String,
+    mut context: tera::Context,
+    xyz_files: Option<Vec<PathBuf>>,
+) -> Result<Vec<(String, String)>, Error> {
+    let (parsed_template, opts) = parse_template(&template)?;
+    let extension = match opts.extension {
+        Some(ext) => ext,
+        None => "inp".to_string(),
+    };
+
+    let mut tera = Tera::default();
+    // tera.register_function(, ); split returns the two splitted molecules
+    // tera.register_function(, ); print returns a string with the xyz structure of the molecule
+    tera.add_raw_template("template", &parsed_template)?;
+
+    let mut result = vec![];
+
+    let (n, mut xyzfiles) = match xyz_files {
+        Some(files) => (files.len(), files),
+        None => (0, vec![]),
+    };
+
+    if n == 0 {
+        result.push((
+            tera.render("template", &context)?,
+            [template, extension.clone()].join("."),
+        ));
+    } else {
+        // this loop is neccessary because there might be xyz files with
+        // multiple structures
+        for index in 0..n {
+            let mut molecules = Molecule::from_xyz(xyzfiles.pop().unwrap())?;
+            if molecules.len() != 1 {}
+            loop {
+                let molecule = molecules.pop();
+                match molecule {
+                    Some(mol) => {
+                        context.insert("molecule", &mol);
+                        result.push((
+                            tera.render("template", &context)?,
+                            [mol.filename, extension.clone()].join("."),
+                        ));
+                    }
+                    None => break,
+                }
+            }
+        }
+    }
+    Ok(result)
+}
+
+fn parse_template(template: &String) -> Result<(String, TemplateOptions), Error> {
     let template_path = get_template_path(template)?;
+    let raw_template = read_to_string(&template_path)
+        .context(format!("Cant find template {:?}", template_path))?;
+
+    let mut lines = raw_template.lines().peekable();
+    let mut options = "".to_string();
+    let mut template = "".to_string();
+
+    loop {
+        let next = lines.next();
+        if next.is_none() {
+            break;
+        } else if next.unwrap().contains("---") {
+            loop {
+                if lines.peek().unwrap().contains("---") {
+                    let _ = lines.next();
+                    break;
+                }
+                options = [options, lines.next().unwrap().to_string()].join("\n");
+            }
+        } else {
+            template = [template, next.unwrap().to_string()].join("\n");
+        }
+    }
+    template = template.replacen("\n", "", 1); //remove first empty line
+
+    let template_opts: TemplateOptions =
+        toml::from_str(&options).context("Failed to parse extension in template header")?;
+    Ok((template, template_opts))
+}
+
+fn edit_template(template: String) -> Result<(), Error> {
+    let template_path = get_template_path(&template)?;
     // The edit crate makes this work in all platforms.
     edit::edit_file(template_path)?;
     Ok(())
 }
 
 fn print_template(template: String) -> Result<(), Error> {
-    let template_path = get_template_path(template)?;
+    let template_path = get_template_path(&template)?;
     let template = read_to_string(&template_path)
         .context(format!("Cant find template {:?}", template_path))?;
     println!("{}", &template);
@@ -408,7 +501,7 @@ fn print_descent_dir(entry: PathBuf, gedent_home_len: usize) -> Result<(), Error
     }
 }
 
-fn get_template_path(template: String) -> Result<PathBuf, Error> {
+fn get_template_path(template: &String) -> Result<PathBuf, Error> {
     let template_path: PathBuf = [
         get_gedent_home()?,
         Into::into(TEMPLATES_DIR),
@@ -417,14 +510,6 @@ fn get_template_path(template: String) -> Result<PathBuf, Error> {
     .iter()
     .collect();
     Ok(template_path)
-}
-
-fn render_template(template_name: String, context: tera::Context) -> Result<String, Error> {
-    let template_path = get_template_path(template_name)?;
-    let template = read_to_string(&template_path)
-        .context(format!("Cant find template {:?}", template_path))?;
-    let result = Tera::one_off(&template, &context, true).context("Failed to render template.")?;
-    Ok(result)
 }
 
 // There may be a better way to write this?
