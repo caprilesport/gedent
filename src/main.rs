@@ -3,7 +3,7 @@ use crate::molecule::Molecule;
 use anyhow::{anyhow, Context, Error, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use serde::Deserialize;
-use std::fs::{copy, create_dir, read_dir, read_to_string, write};
+use std::fs::{copy, read_dir, read_to_string, write};
 use std::path::PathBuf;
 use tera::Tera;
 use toml::{map::Map, Table, Value};
@@ -11,7 +11,6 @@ use toml::{map::Map, Table, Value};
 mod molecule;
 
 const CONFIG_NAME: &str = "gedent.toml";
-const DIR_NAME: &str = ".gedent";
 const PRESETS_DIR: &str = "presets";
 const TEMPLATES_DIR: &str = "templates";
 
@@ -230,16 +229,16 @@ fn get_gedent_home() -> Result<PathBuf, Error> {
 }
 
 // git-like search, stop if .gedent folder is found or if dir.parent = none
-fn find_gedent_folder(dir: PathBuf) -> Result<PathBuf, Error> {
+fn find_config(dir: PathBuf) -> Result<PathBuf, Error> {
     let mut gedent = dir.clone();
-    gedent.push(DIR_NAME);
+    gedent.push(CONFIG_NAME);
 
     if std::path::Path::try_exists(&gedent)? {
         return Ok(gedent);
     } else {
         let parent_folder = dir.parent();
         match parent_folder {
-            Some(parent) => return Ok(find_gedent_folder(parent.to_path_buf())?),
+            Some(parent) => return Ok(find_config(parent.to_path_buf())?),
             None => return Ok(get_gedent_home()?),
         };
     }
@@ -283,7 +282,7 @@ fn write_config(config_path: PathBuf, config: Map<String, Value>) -> Result<(), 
 fn get_config_path() -> Result<PathBuf, Error> {
     let current_dir = std::env::current_dir()?;
     let config = PathBuf::from(CONFIG_NAME);
-    Ok([find_gedent_folder(current_dir)?, config].iter().collect())
+    Ok([find_config(current_dir)?, config].iter().collect())
 }
 
 fn delete_config(key: String, mut config: Map<String, Value>) -> Result<Map<String, Value>, Error> {
@@ -558,17 +557,12 @@ fn gedent_init(config: Option<String>) -> Result<(), Error> {
         }
     };
 
-    let mut gedent = PathBuf::from(DIR_NAME);
+    let gedent = PathBuf::from(CONFIG_NAME.to_string());
 
     if std::path::Path::try_exists(&gedent)? {
-        anyhow::bail!(".gedent already exists, exiting...");
+        anyhow::bail!("gedent.toml already exists, exiting...");
     }
 
-    // let mut templates = gedent.clone();
-    // templates.push(TEMPLATES_DIR);
-    create_dir(&gedent)?;
-    // create_dir(&templates)?;
-    gedent.push(CONFIG_NAME);
     copy(config_path, gedent)?;
     Ok(())
 }
@@ -630,5 +624,5 @@ mod tests {
     // templates - need a rewrite, trying to write tests enforce this
     // parsing
     // generating
-    //
+    // edit and init do not make sense testing
 }
