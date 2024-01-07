@@ -2,16 +2,15 @@
 use crate::molecule::Molecule;
 use anyhow::{anyhow, Context, Error, Result};
 use clap::{Parser, Subcommand, ValueEnum};
-use serde::{Deserialize, Serialize};
-use std::fs::{copy, create_dir, read_dir, read_to_string, write};
+use serde::Deserialize;
+use std::fs::{copy, read_dir, read_to_string, write};
 use std::path::PathBuf;
 use tera::Tera;
-use toml::{Table, Value};
+use toml::{map::Map, Table, Value};
 
 mod molecule;
 
 const CONFIG_NAME: &str = "gedent.toml";
-const DIR_NAME: &str = ".gedent";
 const PRESETS_DIR: &str = "presets";
 const TEMPLATES_DIR: &str = "templates";
 
@@ -21,6 +20,14 @@ const TEMPLATES_DIR: &str = "templates";
 struct Cli {
     #[command(subcommand)]
     mode: Mode,
+}
+
+// this can be expanded in the future, i dont know if there will be more useful stuff
+// that could be in a metada section for the input. i though requiring different molecules
+// could be nice, but thats quite a boring implementation for now, in the future i might come back
+#[derive(Clone, Debug, Default, Deserialize)]
+struct TemplateOptions {
+    extension: Option<String>,
 }
 
 #[derive(Debug, Subcommand)]
@@ -119,7 +126,7 @@ enum ConfigSubcommand {
         value: String,
         /// Sets the type of the value in the config file
         #[arg(short, long, default_value = "string")]
-        type_of_value: ArgType,
+        toml_type: ArgType,
     },
     /// Deletes a certain key in the configuration
     Del {
@@ -140,14 +147,6 @@ enum ArgType {
     Bool,
 }
 
-// this can be expanded in the future, i dont know if there will be more useful stuff
-// that could be in a metada section for the input. i though requiring different molecules
-// could be nice, but thats quite a boring implementation for now, in the future i might come back
-#[derive(Clone, Debug, Default, Deserialize)]
-struct TemplateOptions {
-    extension: Option<String>,
-}
-
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -163,13 +162,28 @@ fn main() -> Result<()> {
 
         Mode::Config { config_subcommand } => match config_subcommand {
             ConfigSubcommand::Print { location } => print_config(location)?,
-            ConfigSubcommand::Set { key, value } => set_config(key, value)?,
+            ConfigSubcommand::Set { key, value } => {
+                let config_path = get_config_path()?;
+                let config = load_config(&config_path)?;
+                let config = set_config(key, value, config)?;
+                write_config(config_path, config)?
+            }
             ConfigSubcommand::Add {
                 key,
                 value,
-                type_of_value,
-            } => add_config(key, value, type_of_value)?,
-            ConfigSubcommand::Del { key } => delete_config(key)?,
+                toml_type,
+            } => {
+                let config_path = get_config_path()?;
+                let config = load_config(&config_path)?;
+                let config = add_config(key, value, toml_type, config)?;
+                write_config(config_path, config)?
+            }
+            ConfigSubcommand::Del { key } => {
+                let config_path = get_config_path()?;
+                let config = load_config(&config_path)?;
+                let config = delete_config(key, config)?;
+                write_config(config_path, config)?
+            }
             ConfigSubcommand::Edit {} => edit_config()?,
         },
 
@@ -202,64 +216,86 @@ fn get_gedent_home() -> Result<PathBuf, Error> {
 }
 
 // git-like search, stop if .gedent folder is found or if dir.parent = none
-fn find_gedent_folder(dir: PathBuf) -> Result<PathBuf, Error> {
+fn find_config(dir: PathBuf) -> Result<PathBuf, Error> {
     let mut gedent = dir.clone();
-    gedent.push(DIR_NAME);
+    gedent.push(CONFIG_NAME);
 
     if std::path::Path::try_exists(&gedent)? {
         return Ok(gedent);
     } else {
         let parent_folder = dir.parent();
         match parent_folder {
-            Some(parent) => return Ok(find_gedent_folder(parent.to_path_buf())?),
+            Some(parent) => return Ok(find_config(parent.to_path_buf())?),
             None => return Ok(get_gedent_home()?),
         };
     }
 }
 
 // Config functionality
-fn parse_config(config_path: &PathBuf) -> Result<toml::map::Map<String, Value>, anyhow::Error> {
+// Can i test this somehow, or is it useless?
+// Same applies to all functions that receive a pathbuf, should decouple whenever possible
+fn load_config(config_path: &PathBuf) -> Result<Map<String, Value>, anyhow::Error> {
     let config_file =
         read_to_string(&config_path).context(format!("Cant open config {:?}", config_path))?;
     let config: Table = config_file.parse()?;
     Ok(config)
 }
 
-fn write_config(config_path: PathBuf, config: toml::map::Map<String, Value>) -> Result<(), Error> {
+fn edit_config() -> Result<(), Error> {
+    let config_path = get_config_path()?;
+    edit::edit_file(config_path)?;
+    Ok(())
+}
+
+// I can decouple thid fn from the Path, but maybe it's not worth it,
+// as it does not have a return value
+fn print_config(location: bool) -> Result<(), Error> {
+    let config_path = get_config_path()?;
+    let config = read_to_string(&config_path)?;
+    if location {
+        println!("Printing config from {:?}", config_path);
+    }
+    print!("{}", config);
+    Ok(())
+}
+
+fn write_config(config_path: PathBuf, config: Map<String, Value>) -> Result<(), Error> {
     write(&config_path, config.to_string())?;
     println!("Config wrote to {:?}.", config_path);
     Ok(())
 }
 
+// After this function everything should be decoupled from the config path
 fn get_config_path() -> Result<PathBuf, Error> {
     let current_dir = std::env::current_dir()?;
     let config = PathBuf::from(CONFIG_NAME);
-    Ok([find_gedent_folder(current_dir)?, config].iter().collect())
+    Ok([find_config(current_dir)?, config].iter().collect())
 }
 
-fn delete_config(key: String) -> Result<(), Error> {
-    let config_path = get_config_path()?;
-    let mut config = parse_config(&config_path)?;
-    config.remove(&key);
+fn delete_config(key: String, mut config: Map<String, Value>) -> Result<Map<String, Value>, Error> {
+    config
+        .remove(&key)
+        .ok_or(anyhow!("Failed to remove key, not found."))?;
     println!("Removed key {}.", key);
-    write_config(config_path, config)?;
-    Ok(())
+    Ok(config)
 }
 
-fn add_config(key: String, value: String, type_of_value: ArgType) -> Result<(), Error> {
-    let config_path = get_config_path()?;
-    let mut config = parse_config(&config_path)?;
-
+fn add_config(
+    key: String,
+    value: String,
+    toml_type: ArgType,
+    mut config: Map<String, Value>,
+) -> Result<Map<String, Value>, Error> {
     if config.contains_key(&key) {
         anyhow::bail!(format!("Config already contains {}, exiting.", key));
     }
 
     println!(
         "Setting config {} to {} with argtype {:?}",
-        key, value, type_of_value
+        key, value, toml_type
     );
 
-    match type_of_value {
+    match toml_type {
         ArgType::Int => {
             config.insert(key, Value::Integer(value.parse::<i64>()?));
         }
@@ -274,13 +310,14 @@ fn add_config(key: String, value: String, type_of_value: ArgType) -> Result<(), 
         }
     }
 
-    write_config(config_path, config)?;
-    Ok(())
+    Ok(config)
 }
 
-fn set_config(key: String, value: String) -> Result<(), Error> {
-    let config_path = get_config_path()?;
-    let mut config = parse_config(&config_path)?;
+fn set_config(
+    key: String,
+    value: String,
+    mut config: Map<String, Value>,
+) -> Result<Map<String, Value>, Error> {
     let current_value = config
         .get(&key)
         .ok_or(anyhow!("Cant find {} in config.", key))?;
@@ -306,28 +343,10 @@ fn set_config(key: String, value: String) -> Result<(), Error> {
         _ => anyhow::bail!("Unsupported type"),
     }
 
-    write_config(config_path, config)?;
-    Ok(())
-}
-
-fn edit_config() -> Result<(), Error> {
-    let config_path = get_config_path()?;
-    edit::edit_file(config_path)?;
-    Ok(())
-}
-
-fn print_config(location: bool) -> Result<(), Error> {
-    let config_path = get_config_path()?;
-    let config = read_to_string(&config_path)?;
-    if location {
-        println!("Printing config from {:?}", config_path);
-    }
-    print!("{}", config);
-    Ok(())
+    Ok(config)
 }
 
 // Template functionality
-// TODO: refactor this little guy
 fn generate_template(
     template: String,
     xyz_files: Option<Vec<PathBuf>>,
@@ -339,7 +358,7 @@ fn generate_template(
     };
 
     let mut context = tera::Context::new();
-    let config = parse_config(&config_path)?;
+    let config = load_config(&config_path)?;
     for (key, value) in config {
         context.insert(key, &value);
     }
@@ -347,18 +366,24 @@ fn generate_template(
     let results = render_template(template, context, xyz_files)?;
 
     for i in results {
-        println!("template name: {} \n{}", i.1, i.0);
+        println!("{} \n{}", i.1, i.0);
     }
 
     Ok(())
 }
 
+// TODO: refactor this little guy
 fn render_template(
-    template: String,
+    template_name: String,
     mut context: tera::Context,
     xyz_files: Option<Vec<PathBuf>>,
 ) -> Result<Vec<(String, String)>, Error> {
-    let (parsed_template, opts) = parse_template(&template)?;
+    // this doesnt belong here
+    let template_path = get_template_path(&template_name)?;
+    let raw_template = read_to_string(&template_path)
+        .context(format!("Cant find template {:?}", template_path))?;
+
+    let (parsed_template, opts) = parse_template(&raw_template)?;
     let extension = match opts.extension {
         Some(ext) => ext,
         None => "inp".to_string(),
@@ -379,12 +404,12 @@ fn render_template(
     if n == 0 {
         result.push((
             tera.render("template", &context)?,
-            [template, extension.clone()].join("."),
+            [template_name, extension.clone()].join("."),
         ));
     } else {
         // this loop is neccessary because there might be xyz files with
         // multiple structures
-        for index in 0..n {
+        for _index in 0..n {
             let mut molecules = Molecule::from_xyz(xyzfiles.pop().unwrap())?;
             if molecules.len() != 1 {}
             loop {
@@ -405,13 +430,9 @@ fn render_template(
     Ok(result)
 }
 
-fn parse_template(template: &String) -> Result<(String, TemplateOptions), Error> {
-    let template_path = get_template_path(template)?;
-    let raw_template = read_to_string(&template_path)
-        .context(format!("Cant find template {:?}", template_path))?;
-
+fn parse_template(raw_template: &String) -> Result<(String, TemplateOptions), Error> {
     let mut lines = raw_template.lines().peekable();
-    let mut options = "".to_string();
+    let mut header = "".to_string();
     let mut template = "".to_string();
 
     loop {
@@ -424,16 +445,17 @@ fn parse_template(template: &String) -> Result<(String, TemplateOptions), Error>
                     let _ = lines.next();
                     break;
                 }
-                options = [options, lines.next().unwrap().to_string()].join("\n");
+                header = [header, lines.next().unwrap().to_string()].join("\n");
             }
         } else {
             template = [template, next.unwrap().to_string()].join("\n");
         }
     }
     template = template.replacen("\n", "", 1); //remove first empty line
+                                               // template = template[1..template.len() - 2].; //remove first empty line
 
     let template_opts: TemplateOptions =
-        toml::from_str(&options).context("Failed to parse extension in template header")?;
+        toml::from_str(&header).context("Failed to parse extension in template header")?;
     Ok((template, template_opts))
 }
 
@@ -524,17 +546,124 @@ fn gedent_init(config: Option<String>) -> Result<(), Error> {
         }
     };
 
-    let mut gedent = PathBuf::from(DIR_NAME);
+    let gedent = PathBuf::from(CONFIG_NAME.to_string());
 
     if std::path::Path::try_exists(&gedent)? {
-        anyhow::bail!(".gedent already exists, exiting...");
+        anyhow::bail!("gedent.toml already exists, exiting...");
     }
 
-    // let mut templates = gedent.clone();
-    // templates.push(TEMPLATES_DIR);
-    create_dir(&gedent)?;
-    // create_dir(&templates)?;
-    gedent.push(CONFIG_NAME);
     copy(config_path, gedent)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn verify_cli() {
+        use clap::CommandFactory;
+
+        Cli::command().debug_assert();
+    }
+
+    #[test]
+    fn config_add_key_works() {
+        let mut final_config = Map::new();
+        final_config.insert("testkey".to_string(), Value::Boolean(false));
+        let config = Map::new();
+        match add_config(
+            "testkey".to_string(),
+            "false".to_string(),
+            ArgType::Bool,
+            config,
+        ) {
+            Ok(val) => assert_eq!(val, final_config),
+            Err(_) => core::panic!("Test failed to add key"),
+        }
+    }
+
+    #[test]
+    fn config_edit_key_works() {
+        let mut final_config = Map::new();
+        final_config.insert("testkey".to_string(), Value::Boolean(false));
+        let mut config = Map::new();
+        config.insert("testkey".to_string(), Value::Boolean(true));
+        match set_config("testkey".to_string(), "false".to_string(), config) {
+            Ok(conf) => assert_eq!(final_config, conf),
+            Err(_) => core::panic!("Test failed to set key"),
+        }
+    }
+
+    #[test]
+    fn config_del_key_works() {
+        let final_config = Map::new();
+        let mut config = Map::new();
+        config.insert("testkey".to_string(), Value::Boolean(true));
+        match delete_config("testkey".to_string(), config) {
+            Ok(conf) => assert_eq!(final_config, conf),
+            Err(_) => core::panic!("Test failed to delete key"),
+        }
+    }
+
+    #[test]
+    fn parse_template_works() {
+        let raw_template = "
+---
+extension = \"inp\"
+---
+! {{ dft_level }} {{ dft_basis_set }} 
+! Opt freq D3BJ
+
+%pal
+ nprocs {{ nprocs }}
+end
+
+%maxcore {{ memory }} 
+
+{% if solvation -%}
+%cpcm
+ smd true
+ smdsolvent \"{{ solvent }}\"
+end
+
+{% endif -%}"
+            .to_string();
+
+        let test_parsed_template = "
+! {{ dft_level }} {{ dft_basis_set }} 
+! Opt freq D3BJ
+
+%pal
+ nprocs {{ nprocs }}
+end
+
+%maxcore {{ memory }} 
+
+{% if solvation -%}
+%cpcm
+ smd true
+ smdsolvent \"{{ solvent }}\"
+end
+
+{% endif -%}"
+            .to_string();
+
+        match parse_template(&raw_template) {
+            Ok((template, opts)) => {
+                assert_eq!(template, test_parsed_template);
+                assert_eq!(opts.extension, Some("inp".to_string()))
+            }
+            Err(_) => core::panic!("Error parsing template!"),
+        }
+
+        // when there is no header opts.extension shoud be none
+        match parse_template(&test_parsed_template) {
+            Ok((template, opts)) => {
+                assert_eq!(template, test_parsed_template);
+                assert_eq!(opts.extension, None)
+            }
+            Err(_) => core::panic!("Error parsing template!"),
+        }
+    }
 }

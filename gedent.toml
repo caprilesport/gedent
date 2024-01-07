@@ -1,4 +1,9 @@
-solvation = true
-solvent = "water"
-dft_level = "PB86"
+charge = 0
 dft_basis_set = "def2svp"
+dft_level = "PB86"
+memory = 3000
+mult = 1
+nprocs = 8
+solvation = false
+solvent = "water"
+xyz_file = "init.xyz"
