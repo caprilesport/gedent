@@ -22,13 +22,6 @@ struct Cli {
     mode: Mode,
 }
 
-// #[derive(Clone, Debug)]
-// struct Template {
-//     path: PathBuf,
-//     raw_content: String,
-//     parsed_template: String,
-// }
-
 // this can be expanded in the future, i dont know if there will be more useful stuff
 // that could be in a metada section for the input. i though requiring different molecules
 // could be nice, but thats quite a boring implementation for now, in the future i might come back
@@ -36,12 +29,6 @@ struct Cli {
 struct TemplateOptions {
     extension: Option<String>,
 }
-
-// #[derive(Clone, Debug)]
-// struct Config {
-//     path: PathBuf,
-//     content: Map<String, Value>,
-// }
 
 #[derive(Debug, Subcommand)]
 enum Mode {
@@ -139,7 +126,7 @@ enum ConfigSubcommand {
         value: String,
         /// Sets the type of the value in the config file
         #[arg(short, long, default_value = "string")]
-        type_of_value: ArgType,
+        toml_type: ArgType,
     },
     /// Deletes a certain key in the configuration
     Del {
@@ -184,11 +171,11 @@ fn main() -> Result<()> {
             ConfigSubcommand::Add {
                 key,
                 value,
-                type_of_value,
+                toml_type,
             } => {
                 let config_path = get_config_path()?;
                 let config = load_config(&config_path)?;
-                let config = add_config(key, value, type_of_value, config)?;
+                let config = add_config(key, value, toml_type, config)?;
                 write_config(config_path, config)?
             }
             ConfigSubcommand::Del { key } => {
@@ -296,7 +283,7 @@ fn delete_config(key: String, mut config: Map<String, Value>) -> Result<Map<Stri
 fn add_config(
     key: String,
     value: String,
-    type_of_value: ArgType,
+    toml_type: ArgType,
     mut config: Map<String, Value>,
 ) -> Result<Map<String, Value>, Error> {
     if config.contains_key(&key) {
@@ -305,10 +292,10 @@ fn add_config(
 
     println!(
         "Setting config {} to {} with argtype {:?}",
-        key, value, type_of_value
+        key, value, toml_type
     );
 
-    match type_of_value {
+    match toml_type {
         ArgType::Int => {
             config.insert(key, Value::Integer(value.parse::<i64>()?));
         }
@@ -360,7 +347,6 @@ fn set_config(
 }
 
 // Template functionality
-// TODO: refactor this little guy
 fn generate_template(
     template: String,
     xyz_files: Option<Vec<PathBuf>>,
@@ -380,18 +366,24 @@ fn generate_template(
     let results = render_template(template, context, xyz_files)?;
 
     for i in results {
-        println!("template name: {} \n{}", i.1, i.0);
+        println!("{} \n{}", i.1, i.0);
     }
 
     Ok(())
 }
 
+// TODO: refactor this little guy
 fn render_template(
-    template: String,
+    template_name: String,
     mut context: tera::Context,
     xyz_files: Option<Vec<PathBuf>>,
 ) -> Result<Vec<(String, String)>, Error> {
-    let (parsed_template, opts) = parse_template(&template)?;
+    // this doesnt belong here
+    let template_path = get_template_path(&template_name)?;
+    let raw_template = read_to_string(&template_path)
+        .context(format!("Cant find template {:?}", template_path))?;
+
+    let (parsed_template, opts) = parse_template(&raw_template)?;
     let extension = match opts.extension {
         Some(ext) => ext,
         None => "inp".to_string(),
@@ -412,12 +404,12 @@ fn render_template(
     if n == 0 {
         result.push((
             tera.render("template", &context)?,
-            [template, extension.clone()].join("."),
+            [template_name, extension.clone()].join("."),
         ));
     } else {
         // this loop is neccessary because there might be xyz files with
         // multiple structures
-        for index in 0..n {
+        for _index in 0..n {
             let mut molecules = Molecule::from_xyz(xyzfiles.pop().unwrap())?;
             if molecules.len() != 1 {}
             loop {
@@ -438,13 +430,9 @@ fn render_template(
     Ok(result)
 }
 
-fn parse_template(template: &String) -> Result<(String, TemplateOptions), Error> {
-    let template_path = get_template_path(template)?;
-    let raw_template = read_to_string(&template_path)
-        .context(format!("Cant find template {:?}", template_path))?;
-
+fn parse_template(raw_template: &String) -> Result<(String, TemplateOptions), Error> {
     let mut lines = raw_template.lines().peekable();
-    let mut options = "".to_string();
+    let mut header = "".to_string();
     let mut template = "".to_string();
 
     loop {
@@ -457,16 +445,17 @@ fn parse_template(template: &String) -> Result<(String, TemplateOptions), Error>
                     let _ = lines.next();
                     break;
                 }
-                options = [options, lines.next().unwrap().to_string()].join("\n");
+                header = [header, lines.next().unwrap().to_string()].join("\n");
             }
         } else {
             template = [template, next.unwrap().to_string()].join("\n");
         }
     }
     template = template.replacen("\n", "", 1); //remove first empty line
+                                               // template = template[1..template.len() - 2].; //remove first empty line
 
     let template_opts: TemplateOptions =
-        toml::from_str(&options).context("Failed to parse extension in template header")?;
+        toml::from_str(&header).context("Failed to parse extension in template header")?;
     Ok((template, template_opts))
 }
 
@@ -617,12 +606,64 @@ mod tests {
         }
     }
 
-    // fns to have tests written:
-    // configurations
-    // is there a way to guarantee fns that depend on filesystem to be tested?
+    #[test]
+    fn parse_template_works() {
+        let raw_template = "
+---
+extension = \"inp\"
+---
+! {{ dft_level }} {{ dft_basis_set }} 
+! Opt freq D3BJ
 
-    // templates - need a rewrite, trying to write tests enforce this
-    // parsing
-    // generating
-    // edit and init do not make sense testing
+%pal
+ nprocs {{ nprocs }}
+end
+
+%maxcore {{ memory }} 
+
+{% if solvation -%}
+%cpcm
+ smd true
+ smdsolvent \"{{ solvent }}\"
+end
+
+{% endif -%}"
+            .to_string();
+
+        let test_parsed_template = "
+! {{ dft_level }} {{ dft_basis_set }} 
+! Opt freq D3BJ
+
+%pal
+ nprocs {{ nprocs }}
+end
+
+%maxcore {{ memory }} 
+
+{% if solvation -%}
+%cpcm
+ smd true
+ smdsolvent \"{{ solvent }}\"
+end
+
+{% endif -%}"
+            .to_string();
+
+        match parse_template(&raw_template) {
+            Ok((template, opts)) => {
+                assert_eq!(template, test_parsed_template);
+                assert_eq!(opts.extension, Some("inp".to_string()))
+            }
+            Err(_) => core::panic!("Error parsing template!"),
+        }
+
+        // when there is no header opts.extension shoud be none
+        match parse_template(&test_parsed_template) {
+            Ok((template, opts)) => {
+                assert_eq!(template, test_parsed_template);
+                assert_eq!(opts.extension, None)
+            }
+            Err(_) => core::panic!("Error parsing template!"),
+        }
+    }
 }
