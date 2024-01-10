@@ -1,13 +1,12 @@
-#![allow(dead_code, unused_variables, unused_imports)]
+// #![allow(dead_code, unused_variables, unused_imports)]
 use crate::config::Config;
 use crate::molecule::Molecule;
 use anyhow::{anyhow, Context, Error, Result};
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Parser, Subcommand};
 use serde::Deserialize;
-use std::fs::{copy, read_dir, read_to_string, write};
+use std::fs::{copy, read_dir, read_to_string};
 use std::path::PathBuf;
 use tera::Tera;
-use toml::{map::Map, Table, Value};
 
 mod config;
 mod molecule;
@@ -113,24 +112,24 @@ enum ConfigSubcommand {
         /// Value associated with key
         value: String,
     },
-    //     /// Adds a key, value to the config file, for typed values use an option
-    //     Add {
-    //         /// Key to be added
-    //         key: String,
-    //         /// Value associated with key, can be a string, int, float or bool. Default is string.
-    //         value: String,
-    //         /// Sets the type of the value in the config file
-    //         #[arg(short, long, default_value = "string")]
-    //         toml_type: crate::config::ArgType,
-    //     },
-    //     /// Deletes a certain key in the configuration
-    //     Del {
-    //         /// Key to be deleted.
-    //         key: String,
-    //     },
-    //     /// Opens the currently used config file in your default editor.
-    //     #[command(alias = "e")]
-    //     Edit {},
+    /// Adds a key, value to the config file, for typed values use an option
+    Add {
+        /// Key to be added
+        key: String,
+        /// Value associated with key, can be a string, int, float or bool. Default is string.
+        value: String,
+        /// Sets the type of the value in the config file
+        #[arg(short, long, default_value = "string")]
+        toml_type: crate::config::ArgType,
+    },
+    /// Deletes a certain key in the configuration
+    Del {
+        /// Key to be deleted.
+        key: String,
+    },
+    /// Opens the currently used config file in your default editor.
+    #[command(alias = "e")]
+    Edit {},
 }
 
 fn main() -> Result<()> {
@@ -152,27 +151,25 @@ fn main() -> Result<()> {
                 config.print(location)?
             }
             ConfigSubcommand::Set { key, value } => {
-                let config = Config::get()?;
-                config.set(key, value);
-                config.write();
+                let mut config = Config::get()?;
+                config.set(key, value)?;
+                config.write()?;
             }
-            // ConfigSubcommand::Add {
-            //     key,
-            //     value,
-            //     toml_type,
-            // } => {
-            //     let config_path = get_config_path()?;
-            //     let config = load_config(&config_path)?;
-            //     let config = add_config(key, value, toml_type, config)?;
-            //     write_config(config_path, config)?
-            // }
-            // ConfigSubcommand::Del { key } => {
-            //     let config_path = get_config_path()?;
-            //     let config = load_config(&config_path)?;
-            //     let config = delete_config(key, config)?;
-            //     write_config(config_path, config)?
-            // }
-            // ConfigSubcommand::Edit {} => edit_config()?,
+            ConfigSubcommand::Add {
+                key,
+                value,
+                toml_type,
+            } => {
+                let mut config = Config::get()?;
+                config.add(key, value, toml_type)?;
+                config.write()?;
+            }
+            ConfigSubcommand::Del { key } => {
+                let mut config = Config::get()?;
+                config.delete(key)?;
+                config.write()?;
+            }
+            ConfigSubcommand::Edit {} => Config::edit()?,
         },
 
         Mode::Template {
@@ -203,13 +200,13 @@ fn get_gedent_home() -> Result<PathBuf, Error> {
     Ok(gedent_home)
 }
 
-#[derive(Clone, Debug)]
-struct Template {
-    name: String,
-    path: PathBuf,
-    raw_template: String,
-    parsed_template: String,
-}
+// #[derive(Clone, Debug)]
+// struct Template {
+//     name: String,
+//     path: PathBuf,
+//     raw_template: String,
+//     parsed_template: String,
+// }
 
 // this can be expanded in the future, i dont know if there will be more useful stuff
 // that could be in a metada section for the input. i though requiring different molecules
@@ -219,30 +216,30 @@ struct TemplateOptions {
     extension: Option<String>,
 }
 
-impl Template {
-    fn new() -> Template {
-        return Template {
-            name: "".to_string(),
-            path: PathBuf::from(""),
-            raw_template: "".to_string(),
-            parsed_template: "".to_string(),
-        };
-    }
+// impl Template {
+//     fn new() -> Template {
+//         return Template {
+//             name: "".to_string(),
+//             path: PathBuf::from(""),
+//             raw_template: "".to_string(),
+//             parsed_template: "".to_string(),
+//         };
+//     }
 
-    fn gen(
-        &self,
-        xyz_files: Option<Vec<PathBuf>>,
-        config: Option<Config>,
-    ) -> Result<Template, Error> {
-        Ok(Template::new())
-    }
-}
+//     fn gen(
+//         &self,
+//         xyz_files: Option<Vec<PathBuf>>,
+//         config: Option<Config>,
+//     ) -> Result<Template, Error> {
+//         Ok(Template::new())
+//     }
+// }
 
 // Template functionality
 fn generate_template(
     template: String,
     xyz_files: Option<Vec<PathBuf>>,
-    config: Option<PathBuf>,
+    _config: Option<PathBuf>,
 ) -> Result<(), Error> {
     // let config_path = match config {
     //     Some(config_path) => config_path,
