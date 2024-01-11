@@ -1,4 +1,9 @@
-charge = 0
+[gedent]
+default_extension = "inp"
+default_nr_files = 1
+
+[parameters]
+charge = 1
 dft_basis_set = "def2svp"
 dft_level = "PB86"
 memory = 3000
