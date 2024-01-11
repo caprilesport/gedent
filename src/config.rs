@@ -7,14 +7,14 @@ use toml::{map::Map, Value};
 const CONFIG_NAME: &str = "gedent.toml";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-struct GedentConfig {
-    default_extension: String,
+pub struct GedentConfig {
+    pub default_extension: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Config {
-    gedent: GedentConfig,
-    parameters: Map<String, Value>,
+    pub gedent: GedentConfig,
+    pub parameters: Map<String, Value>,
 }
 
 #[derive(Clone, Debug, Default, ValueEnum)]
@@ -126,7 +126,7 @@ impl Config {
         Ok(())
     }
 
-    fn get_path() -> Result<PathBuf, Error> {
+    pub fn get_path() -> Result<PathBuf, Error> {
         let current_dir = std::env::current_dir()?;
         let cfg_path: PathBuf = [find_config(current_dir)?, PathBuf::from(CONFIG_NAME)]
             .iter()
@@ -145,7 +145,7 @@ impl Config {
     }
 }
 
-// git-like search, stop if .gedent folder is found or if dir.parent = none
+// git-like search, stop if gedent.toml is found or if dir.parent = none
 fn find_config(dir: PathBuf) -> Result<PathBuf, Error> {
     let cwd = dir.clone();
     let gedent_config: PathBuf = [dir.clone(), PathBuf::from(CONFIG_NAME)].iter().collect();
