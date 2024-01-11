@@ -336,6 +336,7 @@ dependencies = [
  "clap",
  "edit",
  "serde",
+ "serde_json",
  "tera",
  "toml",
  "wild",
