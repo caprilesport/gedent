@@ -1,5 +1,6 @@
 [gedent]
 default_extension = "inp"
+default_nr_files = 1
 
 [parameters]
 charge = 1
