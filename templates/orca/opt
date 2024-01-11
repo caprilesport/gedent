@@ -1,6 +1,6 @@
----
+--@
 extension = "inp"
----
+--@
 ! {{ dft_level }} {{ dft_basis_set }} 
 ! Opt freq D3BJ
 
