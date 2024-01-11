@@ -5,8 +5,8 @@ use std::path::PathBuf;
 #[derive(PartialEq, Serialize, Deserialize, Debug, Clone)]
 pub struct Molecule {
     pub filename: String,
-    annotations: String,
-    atoms: Vec<String>,
+    pub annotations: String,
+    pub atoms: Vec<String>,
 }
 
 impl Molecule {
