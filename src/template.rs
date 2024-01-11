@@ -3,6 +3,8 @@ use crate::Config;
 use crate::Molecule;
 use anyhow::{anyhow, Context, Error, Result};
 use serde::Deserialize;
+use serde_json::value::{from_value, to_value, Value};
+use std::collections::HashMap;
 use std::fs::{copy, read_dir, read_to_string};
 use std::path::PathBuf;
 use tera::Tera;
@@ -30,8 +32,8 @@ impl Template {
     // from a parsed template to a result, this does the heavy work
     pub fn render(&self, context: &tera::Context) -> Result<String, Error> {
         let mut tera = Tera::default();
-        // tera.register_function(, ); split returns the two splitted molecules
-        // tera.register_function(, ); print returns a string with the xyz structure of the molecule
+        tera.register_function("print_molecule", print_molecule);
+        tera.register_function("split_molecule", split_molecule);
         tera.add_raw_template(&self.name, &self.template)?;
         Ok(tera.render(&self.name, context)?)
     }
@@ -88,6 +90,82 @@ impl Template {
             },
         }
     }
+}
+
+// functions for the templates
+pub fn print_molecule(args: &HashMap<String, Value>) -> Result<Value, tera::Error> {
+    let molecule: Molecule = match args.get("molecule") {
+        Some(val) => match from_value(val.clone()) {
+            Ok(v) => v,
+            Err(_) => {
+                return Err(tera::Error::msg(format!(
+                    "Function `print_molecule` received molecule={} but `molecule` can only be of type Molecule",
+                    val
+                )));
+            }
+        },
+        None => {
+            return Err(tera::Error::msg(
+                "Function `print_molecule` didn't receive a `molecule` argument",
+            ))
+        }
+    };
+
+    let mut full_molecule = "".to_string();
+    for atom in molecule.atoms {
+        full_molecule = [full_molecule, atom, "\n".to_string()].join("");
+    }
+
+    Ok(to_value(full_molecule)?)
+}
+
+pub fn split_molecule(args: &HashMap<String, Value>) -> Result<Value, tera::Error> {
+    let molecule: Molecule = match args.get("molecule") {
+        Some(val) => match from_value(val.clone()) {
+            Ok(v) => v,
+            Err(_) => {
+                return Err(tera::Error::msg(format!(
+                    "Function `print_molecule` received molecule={} but `molecule` can only be of type Molecule",
+                    val
+                )));
+            }
+        },
+        None => {
+            return Err(tera::Error::msg(
+                "Function `print_molecule` didn't receive a `molecule` argument",
+            ))
+        }
+    };
+
+    let index: usize = match args.get("index") {
+        Some(val) => match from_value(val.clone()) {
+            Ok(v) => v,
+            Err(_) => {
+                return Err(tera::Error::msg(format!(
+                    "Function `slit_molecule` received index={} but `index` can only be of type integer.",
+                    val
+                )));
+            }
+        },
+        None => {
+            return Err(tera::Error::msg(
+                "Function `slit_molecule` didn't receive a `index` argument",
+            ))
+        }
+    };
+
+    let (mol1, mol2) = match molecule.split(index) {
+        Ok(molecules) => molecules,
+        Err(err) => {
+            return Err(tera::Error::msg(format!(
+                "Failed to split molecules, caused by {}",
+                err
+            )))
+        }
+    };
+    let molecules = vec![mol1, mol2];
+
+    Ok(to_value(molecules)?)
 }
 
 pub fn print_template(template: String) -> Result<(), Error> {

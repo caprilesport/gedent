@@ -15,6 +15,7 @@ anyhow = "1.0.69"
 clap = { version = "4.0", features = ["derive"] }
 edit = "0.1.5"
 serde = {version = "1.0.152", features = ["derive"]}
+serde_json = "1.0.111"
 tera = "1"
 toml = "0.8.8"
 wild = "2.1.0"
