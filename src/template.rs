@@ -113,9 +113,10 @@ pub fn print_molecule(args: &HashMap<String, Value>) -> Result<Value, tera::Erro
 
     let mut full_molecule = "".to_string();
     for atom in molecule.atoms {
-        full_molecule = [full_molecule, atom, "\n".to_string()].join("");
+        full_molecule = [full_molecule, atom].join("\n");
     }
 
+    full_molecule = full_molecule.replacen("\n", "", 1); //remove first empty line
     Ok(to_value(full_molecule)?)
 }
 
