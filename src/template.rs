@@ -54,13 +54,8 @@ impl Template {
         let mut header = "".to_string();
         let mut template = "".to_string();
 
-        loop {
-            let next = lines.next();
-            if next.is_none() {
-                break;
-            // is it safe to call unwrap here?
-            // I know next is not none so should be..
-            } else if next.unwrap().contains("--@") {
+        while let Some(next) = lines.next() {
+            if next.contains("--@") {
                 loop {
                     if lines.peek().unwrap().contains("--@") {
                         let _ = lines.next();
@@ -69,10 +64,10 @@ impl Template {
                     header = [header, lines.next().unwrap().to_string()].join("\n");
                 }
             } else {
-                template = [template, next.unwrap().to_string()].join("\n");
+                template = [template, next.to_string()].join("\n");
             }
         }
-        template = template.replacen("\n", "", 1); //remove first empty line
+        template = template.replacen('\n', "", 1); //remove first empty line
 
         let template_opts: TemplateOptions =
             toml::from_str(&header).context("Failed to parse template header")?;
@@ -116,7 +111,7 @@ pub fn print_molecule(args: &HashMap<String, Value>) -> Result<Value, tera::Erro
         full_molecule = [full_molecule, atom].join("\n");
     }
 
-    full_molecule = full_molecule.replacen("\n", "", 1); //remove first empty line
+    full_molecule = full_molecule.replacen('\n', "", 1); //remove first empty line
     Ok(to_value(full_molecule)?)
 }
 
@@ -223,7 +218,7 @@ pub fn print_descent_templates(entry: PathBuf, gedent_home_len: usize) -> Result
     if entry.is_dir() {
         let new_dir = read_dir(entry)?;
         for new_entry in new_dir {
-            let _ = print_descent_templates(new_entry.as_ref().unwrap().path(), gedent_home_len)?;
+            print_descent_templates(new_entry.as_ref().unwrap().path(), gedent_home_len)?;
         }
         Ok(())
     } else {

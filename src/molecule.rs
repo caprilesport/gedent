@@ -11,11 +11,11 @@ pub struct Molecule {
 
 impl Molecule {
     fn new() -> Molecule {
-        return Molecule {
+        Molecule {
             filename: "".to_string(),
             annotations: "".to_string(),
             atoms: Vec::new(),
-        };
+        }
     }
 
     pub fn split(&self, index: usize) -> Result<(Molecule, Molecule), Error> {

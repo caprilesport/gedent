@@ -151,13 +151,10 @@ fn main() -> Result<()> {
             print,
         } => {
             let mut molecules: Vec<Molecule> = vec![];
-            match xyz_files {
-                Some(files) => {
-                    for file in files {
-                        molecules = [molecules, Molecule::from_xyz(file)?].concat();
-                    }
+            if let Some(files) = xyz_files {
+                for file in files {
+                    molecules = [molecules, Molecule::from_xyz(file)?].concat();
                 }
-                None => (),
             };
             let template = Template::get(template_name)?;
             let results = generate_input(template, molecules)?;
@@ -256,7 +253,7 @@ fn generate_input(template: Template, molecules: Vec<Molecule>) -> Result<Vec<In
 
     if molecules.is_empty() {
         results.push(Input {
-            filename: PathBuf::from(&template.name).with_extension(&extension),
+            filename: PathBuf::from(&template.name).with_extension(extension),
             content: template.render(&context)?,
         });
     }
@@ -265,7 +262,7 @@ fn generate_input(template: Template, molecules: Vec<Molecule>) -> Result<Vec<In
         let mut mol_context = context.clone();
         mol_context.insert("molecule", &molecule);
         results.push(Input {
-            filename: PathBuf::from(molecule.filename).with_extension(&extension),
+            filename: PathBuf::from(molecule.filename).with_extension(extension),
             content: template.render(&mol_context)?,
         });
     }
