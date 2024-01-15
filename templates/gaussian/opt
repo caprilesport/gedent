@@ -1,0 +1,18 @@
+--@
+extension = "gjf"
+--@
+{%if solvation-%}
+{%set solvent="scrf=(smd, solvent=" ~ solvent ~ ")"-%}
+{%else-%}
+{%set solvent=""-%}
+{%endif-%}
+%chk={{ molecule.filename }}.chk
+%nproc={{ nprocs }}
+%mem={{ memory }}GB
+# {{ dft_level }}/{{ dft_basis_set }} opt freq=noraman {{ solvent }}
+
+job title: {{ molecule.filename }}
+
+{{ charge }} {{mult}}
+{{print_molecule(molecule=molecule)}}
+

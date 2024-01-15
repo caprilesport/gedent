@@ -270,9 +270,13 @@ fn get_gedent_home() -> Result<PathBuf, Error> {
 
 fn select_key(config: &Config) -> Result<String, Error> {
     let keys: Vec<&String> = config.parameters.keys().collect();
+    let mut select = vec![];
+    for (k, v) in &config.parameters {
+        select.push(format!("{} (current value: {})", &k, v));
+    }
     let selection = FuzzySelect::with_theme(&ColorfulTheme::default())
         .default(0)
-        .items(&keys[..])
+        .items(&select[..])
         .interact()?;
     Ok(keys[selection].to_string())
 }

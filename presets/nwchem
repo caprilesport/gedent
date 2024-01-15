@@ -1,0 +1,10 @@
+ title "{{ molecule.filename }}"  
+ geometry    
+{{ print_molecule(molecule=molecule) }}
+ end  
+ basis  
+   n library {{ dft_basis_set }}  
+ end  
+ task {{ dft_level }} optimize
+ task {{ dft_level }} freq
+
