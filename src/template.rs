@@ -29,7 +29,27 @@ pub struct TemplateOptions {
 }
 
 impl Template {
-    // from a parsed template to a result, this does the heavy work
+    pub fn new(software: String, template_name: String) -> Result<(), Error> {
+        let gedent_home = get_gedent_home()?;
+        let template_path: PathBuf = [
+            gedent_home.clone(),
+            Into::into(TEMPLATES_DIR),
+            Into::into(template_name),
+        ]
+        .iter()
+        .collect();
+        let boilerplate: PathBuf = [gedent_home, Into::into(PRESETS_DIR), Into::into(software)]
+            .iter()
+            .collect();
+        copy(&boilerplate, &template_path).context(format!(
+            "Cant copy base {:?} template to {:?}",
+            &boilerplate, &template_path
+        ))?;
+        edit::edit_file(&template_path)
+            .context(format!("Cant open {:?} in editor.", template_path))?;
+        Ok(())
+    }
+
     pub fn render(&self, context: &tera::Context) -> Result<String, Error> {
         let mut tera = Tera::default();
         tera.register_function("print_molecule", print_molecule);
@@ -38,15 +58,68 @@ impl Template {
         Ok(tera.render(&self.name, context)?)
     }
 
+    pub fn get_templates(
+        entry: PathBuf,
+        gedent_home_len: usize,
+        mut templates: Vec<String>,
+    ) -> Result<Vec<String>, Error> {
+        if entry.is_dir() {
+            let new_dir = read_dir(entry)?;
+            for new_entry in new_dir {
+                let new_templates = Template::get_templates(
+                    new_entry.as_ref().unwrap().path(),
+                    gedent_home_len,
+                    vec![],
+                )?;
+                templates = [templates, new_templates].concat();
+            }
+            Ok(templates)
+        } else {
+            templates.push(entry.to_str().unwrap()[gedent_home_len + 1..].to_string());
+            Ok(templates)
+        }
+    }
+
     pub fn get(template_name: String) -> Result<Template, Error> {
         let (parsed, opts) =
-            Template::parse(&read_to_string(find_template_path(&template_name)?)?)?;
+            Template::parse(&read_to_string(Template::find_path(&template_name)?)?)?;
         let template = Template {
             name: template_name,
             template: parsed,
             options: opts,
         };
         Ok(template)
+    }
+
+    pub fn print_template(template: String) -> Result<(), Error> {
+        let template_path = Template::find_path(&template)?;
+        let template = read_to_string(&template_path)
+            .context(format!("Cant find template {:?}", template_path))?;
+        println!("{}", &template);
+        Ok(())
+    }
+
+    pub fn edit_template(template: String) -> Result<(), Error> {
+        let template_path = Template::find_path(&template)?;
+        // The edit crate makes this work in all platforms.
+        edit::edit_file(template_path)?;
+        Ok(())
+    }
+
+    pub fn list_templates() -> Result<(), Error> {
+        let gedent_home: PathBuf = [get_gedent_home()?, Into::into(TEMPLATES_DIR)]
+            .iter()
+            .collect();
+        // +1 is here to remove the first slash
+        let gedent_home_len = gedent_home
+            .to_str()
+            .ok_or(anyhow!("Cant retrieve gedent home len"))?
+            .len();
+        let templates = Template::get_templates(gedent_home, gedent_home_len, vec![])?;
+        for i in templates {
+            println!("{}", i);
+        }
+        Ok(())
     }
 
     fn parse(raw_template: &str) -> Result<(String, TemplateOptions), Error> {
@@ -74,8 +147,20 @@ impl Template {
         Ok((template, template_opts))
     }
 
+    fn find_path(template: &String) -> Result<PathBuf, Error> {
+        let template_path: PathBuf = [
+            get_gedent_home()?,
+            Into::into(TEMPLATES_DIR),
+            Into::into(template),
+        ]
+        .iter()
+        .collect();
+        println!("{:?}", template_path);
+        Ok(template_path)
+    }
+
     // #[cfg(test)]
-    fn new() -> Template {
+    fn new_empty() -> Template {
         Template {
             name: "".to_string(),
             template: "".to_string(),
@@ -94,7 +179,7 @@ pub fn print_molecule(args: &HashMap<String, Value>) -> Result<Value, tera::Erro
             Ok(v) => v,
             Err(_) => {
                 return Err(tera::Error::msg(format!(
-                    "Function `print_molecule` received molecule={} but `molecule` can only be of type Molecule",
+                    "Function `print_molecule` received an object of type {}, not `Molecule`",
                     val
                 )));
             }
@@ -164,80 +249,6 @@ pub fn split_molecule(args: &HashMap<String, Value>) -> Result<Value, tera::Erro
     Ok(to_value(molecules)?)
 }
 
-pub fn print_template(template: String) -> Result<(), Error> {
-    let template_path = find_template_path(&template)?;
-    let template = read_to_string(&template_path)
-        .context(format!("Cant find template {:?}", template_path))?;
-    println!("{}", &template);
-    Ok(())
-}
-
-pub fn edit_template(template: String) -> Result<(), Error> {
-    let template_path = find_template_path(&template)?;
-    // The edit crate makes this work in all platforms.
-    edit::edit_file(template_path)?;
-    Ok(())
-}
-
-pub fn new_template(software: String, template_name: String) -> Result<(), Error> {
-    let gedent_home = get_gedent_home()?;
-    let template_path: PathBuf = [
-        gedent_home.clone(),
-        Into::into(TEMPLATES_DIR),
-        Into::into(template_name),
-    ]
-    .iter()
-    .collect();
-    let boilerplate: PathBuf = [gedent_home, Into::into(PRESETS_DIR), Into::into(software)]
-        .iter()
-        .collect();
-    copy(&boilerplate, &template_path).context(format!(
-        "Cant copy base {:?} template to {:?}",
-        &boilerplate, &template_path
-    ))?;
-    edit::edit_file(&template_path).context(format!("Cant open {:?} in editor.", template_path))?;
-    Ok(())
-}
-
-pub fn list_templates() -> Result<(), Error> {
-    let gedent_home: PathBuf = [get_gedent_home()?, Into::into(TEMPLATES_DIR)]
-        .iter()
-        .collect();
-    // +1 is here to remove the first slash
-    let gedent_home_len = gedent_home
-        .to_str()
-        .ok_or(anyhow!("Cant retrieve gedent home len"))?
-        .len();
-    for entry in read_dir(gedent_home)? {
-        print_descent_templates(entry.as_ref().unwrap().path(), gedent_home_len)?;
-    }
-    Ok(())
-}
-
-pub fn print_descent_templates(entry: PathBuf, gedent_home_len: usize) -> Result<(), Error> {
-    if entry.is_dir() {
-        let new_dir = read_dir(entry)?;
-        for new_entry in new_dir {
-            print_descent_templates(new_entry.as_ref().unwrap().path(), gedent_home_len)?;
-        }
-        Ok(())
-    } else {
-        println!("{}", &entry.to_str().unwrap()[gedent_home_len..]);
-        Ok(())
-    }
-}
-
-fn find_template_path(template: &String) -> Result<PathBuf, Error> {
-    let template_path: PathBuf = [
-        get_gedent_home()?,
-        Into::into(TEMPLATES_DIR),
-        Into::into(template),
-    ]
-    .iter()
-    .collect();
-    Ok(template_path)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -266,7 +277,7 @@ end
         .to_string();
         let template = Template {
             template: parsed_template,
-            ..Template::new()
+            ..Template::new_empty()
         };
 
         let mut context = tera::Context::new();
@@ -285,7 +296,7 @@ end
 
     #[test]
     fn parse_template_works() {
-        let mut template = Template::new();
+        let mut template = Template::new_empty();
         template.template = "--@
 extension = \"inp\"
 --@

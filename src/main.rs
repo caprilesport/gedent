@@ -1,18 +1,21 @@
 #![allow(dead_code, unused_variables, unused_imports)]
 use crate::config::Config;
 use crate::molecule::Molecule;
-use crate::template::{edit_template, list_templates, new_template, print_template};
+use crate::template::Template;
 use anyhow::{anyhow, Context, Error, Result};
 use clap::{Parser, Subcommand};
+use dialoguer::{theme::ColorfulTheme, FuzzySelect};
 use serde::Deserialize;
 use std::fs::{copy, read_dir, read_to_string, write, File};
 use std::path::{Path, PathBuf};
-use template::Template;
 use tera::Tera;
 
 mod config;
 mod molecule;
 mod template;
+
+const PRESETS_DIR: &str = "presets";
+const TEMPLATES_DIR: &str = "templates";
 
 #[derive(Debug)]
 struct Input {
@@ -36,7 +39,7 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Mode {
-    /// Generate a new input based on a template and a xyz file
+    /// Generate a new input based on a template
     #[command(alias = "g")]
     Gen {
         /// The template to look for in ~/.config/gedent/templates
@@ -48,6 +51,7 @@ enum Mode {
         /// xyz files
         #[arg(value_name = "XYZ files")]
         xyz_files: Option<Vec<PathBuf>>,
+        /// Print to screen and don't save file
         #[arg(short, long, default_value_t = false)]
         print: bool,
     },
@@ -217,7 +221,7 @@ fn main() -> Result<()> {
                     Some(templ) => templ,
                     None => select_template()?,
                 };
-                print_template(template)?
+                Template::print_template(template)?
             }
             TemplateSubcommand::New {
                 software,
@@ -229,13 +233,13 @@ fn main() -> Result<()> {
                 };
                 Template::new(software, template_name)?
             }
-            TemplateSubcommand::List {} => list_templates()?,
+            TemplateSubcommand::List {} => Template::list_templates()?,
             TemplateSubcommand::Edit { template } => {
                 let template = match template {
                     Some(template) => template,
                     None => select_template()?,
                 };
-                edit_template(template)?
+                Template::edit_template(template)?
             }
         },
 
