@@ -1,18 +1,21 @@
 #![allow(dead_code, unused_variables, unused_imports)]
 use crate::config::Config;
 use crate::molecule::Molecule;
-use crate::template::{edit_template, list_templates, new_template, print_template};
+use crate::template::Template;
 use anyhow::{anyhow, Context, Error, Result};
 use clap::{Parser, Subcommand};
+use dialoguer::{theme::ColorfulTheme, FuzzySelect};
 use serde::Deserialize;
 use std::fs::{copy, read_dir, read_to_string, write, File};
 use std::path::{Path, PathBuf};
-use template::Template;
 use tera::Tera;
 
 mod config;
 mod molecule;
 mod template;
+
+const PRESETS_DIR: &str = "presets";
+const TEMPLATES_DIR: &str = "templates";
 
 #[derive(Debug)]
 struct Input {
@@ -36,7 +39,7 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Mode {
-    /// Generate a new input based on a template and a xyz file
+    /// Generate a new input based on a template
     #[command(alias = "g")]
     Gen {
         /// The template to look for in ~/.config/gedent/templates
@@ -48,6 +51,7 @@ enum Mode {
         /// xyz files
         #[arg(value_name = "XYZ files")]
         xyz_files: Option<Vec<PathBuf>>,
+        /// Print to screen and don't save file
         #[arg(short, long, default_value_t = false)]
         print: bool,
     },
@@ -79,7 +83,7 @@ enum TemplateSubcommand {
     #[command(alias = "p")]
     Print {
         // name of template to search for
-        template: String,
+        template: Option<String>,
     },
     /// Create a new template from a preset located in ~/.config/gedent/presets
     New {
@@ -87,8 +91,8 @@ enum TemplateSubcommand {
         // templates for a simple singlepoint in the following softwares:
         // ADF, GAMESSUS, GAMESSUK, Gaussian, MOLPRO, NWChem, ORCA
         // also, template will be added in .gedent folder
-        software: String,
         template_name: String,
+        software: Option<String>,
     },
     /// List available templates
     #[command(alias = "l")]
@@ -101,7 +105,7 @@ enum TemplateSubcommand {
     /// Edit a given template
     Edit {
         // opens a given template in $EDITOR
-        template: String,
+        template: Option<String>,
     },
 }
 
@@ -117,9 +121,9 @@ enum ConfigSubcommand {
     /// Sets key to value in the config file, keeps the same type as was setted.
     Set {
         /// Key to be added
-        key: String,
+        key: Option<String>,
         /// Value associated with key
-        value: String,
+        value: Option<String>,
     },
     /// Adds a key, value to the config file, for typed values use an option
     Add {
@@ -134,7 +138,7 @@ enum ConfigSubcommand {
     /// Deletes a certain key in the configuration
     Del {
         /// Key to be deleted.
-        key: String,
+        key: Option<String>,
     },
     /// Opens the currently used config file in your default editor.
     #[command(alias = "e")]
@@ -151,13 +155,10 @@ fn main() -> Result<()> {
             print,
         } => {
             let mut molecules: Vec<Molecule> = vec![];
-            match xyz_files {
-                Some(files) => {
-                    for file in files {
-                        molecules = [molecules, Molecule::from_xyz(file)?].concat();
-                    }
+            if let Some(files) = xyz_files {
+                for file in files {
+                    molecules = [molecules, Molecule::from_xyz(file)?].concat();
                 }
-                None => (),
             };
             let template = Template::get(template_name)?;
             let results = generate_input(template, molecules)?;
@@ -177,6 +178,17 @@ fn main() -> Result<()> {
             }
             ConfigSubcommand::Set { key, value } => {
                 let mut config = Config::get()?;
+                let key = match key {
+                    Some(key) => key,
+                    None => select_key(&config)?,
+                };
+                let value = match value {
+                    Some(val) => val,
+                    None => dialoguer::Input::with_theme(&ColorfulTheme::default())
+                        .with_prompt(format!("Set {} to:", key))
+                        .interact_text()
+                        .unwrap(),
+                };
                 config.set(key, value)?;
                 config.write()?;
             }
@@ -191,6 +203,10 @@ fn main() -> Result<()> {
             }
             ConfigSubcommand::Del { key } => {
                 let mut config = Config::get()?;
+                let key = match key {
+                    Some(key) => key,
+                    None => select_key(&config)?,
+                };
                 config.delete(key)?;
                 config.write()?;
             }
@@ -200,13 +216,31 @@ fn main() -> Result<()> {
         Mode::Template {
             template_subcommand,
         } => match template_subcommand {
-            TemplateSubcommand::Print { template } => print_template(template)?,
+            TemplateSubcommand::Print { template } => {
+                let template = match template {
+                    Some(templ) => templ,
+                    None => select_template()?,
+                };
+                Template::print_template(template)?
+            }
             TemplateSubcommand::New {
                 software,
                 template_name,
-            } => new_template(software, template_name)?,
-            TemplateSubcommand::List {} => list_templates()?,
-            TemplateSubcommand::Edit { template } => edit_template(template)?,
+            } => {
+                let software = match software {
+                    Some(software) => software,
+                    None => select_software()?,
+                };
+                Template::new(software, template_name)?
+            }
+            TemplateSubcommand::List {} => Template::list_templates()?,
+            TemplateSubcommand::Edit { template } => {
+                let template = match template {
+                    Some(template) => template,
+                    None => select_template()?,
+                };
+                Template::edit_template(template)?
+            }
         },
 
         Mode::Init { config } => gedent_init(config)?,
@@ -223,6 +257,49 @@ fn get_gedent_home() -> Result<PathBuf, Error> {
     // https://docs.rs/dirs/latest/dirs/fn.config_dir.html
     let gedent_home: PathBuf = [home_dir, Into::into(".config/gedent")].iter().collect();
     Ok(gedent_home)
+}
+
+fn select_key(config: &Config) -> Result<String, Error> {
+    let keys: Vec<&String> = config.parameters.keys().collect();
+    let selection = FuzzySelect::with_theme(&ColorfulTheme::default())
+        .default(0)
+        .items(&keys[..])
+        .interact()?;
+    Ok(keys[selection].to_string())
+}
+
+fn select_template() -> Result<String, Error> {
+    let gedent_home: PathBuf = [get_gedent_home()?, Into::into(TEMPLATES_DIR)]
+        .iter()
+        .collect();
+    let gedent_home_len = gedent_home
+        .to_str()
+        .ok_or(anyhow!("Cant retrieve gedent home len"))?
+        .len();
+    let templates = Template::get_templates(gedent_home, gedent_home_len, vec![])?;
+    let selection = FuzzySelect::with_theme(&ColorfulTheme::default())
+        .default(0)
+        .items(&templates[..])
+        .interact()
+        .unwrap();
+    Ok(templates[selection].to_string())
+}
+
+fn select_software() -> Result<String, Error> {
+    let softwares: Vec<String> = read_dir(
+        [get_gedent_home()?, Into::into(PRESETS_DIR)]
+            .iter()
+            .collect::<PathBuf>(),
+    )?
+    .filter_map(|e| e.ok())
+    .map(|e| e.path().file_name().unwrap().to_string_lossy().into_owned())
+    .collect();
+    let selection = FuzzySelect::with_theme(&ColorfulTheme::default())
+        .default(0)
+        .items(&softwares[..])
+        .interact()
+        .unwrap();
+    Ok(softwares[selection].to_string())
 }
 
 // copy the specified or currently used config to cwd
@@ -256,7 +333,7 @@ fn generate_input(template: Template, molecules: Vec<Molecule>) -> Result<Vec<In
 
     if molecules.is_empty() {
         results.push(Input {
-            filename: PathBuf::from(&template.name).with_extension(&extension),
+            filename: PathBuf::from(&template.name).with_extension(extension),
             content: template.render(&context)?,
         });
     }
@@ -265,7 +342,7 @@ fn generate_input(template: Template, molecules: Vec<Molecule>) -> Result<Vec<In
         let mut mol_context = context.clone();
         mol_context.insert("molecule", &molecule);
         results.push(Input {
-            filename: PathBuf::from(molecule.filename).with_extension(&extension),
+            filename: PathBuf::from(molecule.filename).with_extension(extension),
             content: template.render(&mol_context)?,
         });
     }

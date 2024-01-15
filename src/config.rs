@@ -151,13 +151,13 @@ fn find_config(dir: PathBuf) -> Result<PathBuf, Error> {
     let gedent_config: PathBuf = [dir.clone(), PathBuf::from(CONFIG_NAME)].iter().collect();
 
     if std::path::Path::try_exists(&gedent_config)? {
-        return Ok(cwd);
+        Ok(cwd)
     } else {
         let parent_folder = dir.parent();
         match parent_folder {
-            Some(parent) => return Ok(find_config(parent.to_path_buf())?),
-            None => return Ok(crate::get_gedent_home()?),
-        };
+            Some(parent) => find_config(parent.to_path_buf()),
+            None => crate::get_gedent_home(),
+        }
     }
 }
 
