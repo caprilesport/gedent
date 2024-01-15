@@ -29,7 +29,7 @@ pub struct TemplateOptions {
 }
 
 impl Template {
-    pub fn new(software: String, template_name: String) -> Result<(), Error> {
+    pub fn from_preset(software: String, template_name: String) -> Result<(), Error> {
         let gedent_home = get_gedent_home()?;
         let template_path: PathBuf = [
             gedent_home.clone(),
@@ -160,7 +160,7 @@ impl Template {
     }
 
     // #[cfg(test)]
-    fn new_empty() -> Template {
+    fn new() -> Template {
         Template {
             name: "".to_string(),
             template: "".to_string(),
@@ -277,7 +277,7 @@ end
         .to_string();
         let template = Template {
             template: parsed_template,
-            ..Template::new_empty()
+            ..Template::new()
         };
 
         let mut context = tera::Context::new();
@@ -296,7 +296,7 @@ end
 
     #[test]
     fn parse_template_works() {
-        let mut template = Template::new_empty();
+        let mut template = Template::new();
         template.template = "--@
 extension = \"inp\"
 --@
