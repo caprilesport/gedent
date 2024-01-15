@@ -4,6 +4,7 @@ default_extension = "inp"
 [parameters]
 charge = 1
 dft_basis_set = "def2svp"
+dft_type = "GGA"
 dft_level = "PB86"
 memory = 3000
 mult = 1

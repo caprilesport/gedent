@@ -1,0 +1,9 @@
+%nproc={{ nprocs }}
+%mem={{ memory }}
+# {{ dft_level }}/{{ dft_basis_set }} opt freq=noraman scrf=(smd, solvent={{ solvent }})
+
+{{ molecule.filename }}
+
+{{ charge }} {{ mult }}
+{{ print_molecule(molecule=molecule) }}
+
