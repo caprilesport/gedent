@@ -5,6 +5,7 @@ use crate::template::Template;
 use anyhow::{anyhow, Context, Error, Result};
 use clap::{Parser, Subcommand};
 use dialoguer::{theme::ColorfulTheme, FuzzySelect};
+use dirs::config_dir;
 use serde::Deserialize;
 use std::fs::{copy, read_dir, read_to_string, write, File};
 use std::path::{Path, PathBuf};
@@ -260,12 +261,9 @@ fn main() -> Result<()> {
 
 //Search for paths
 fn get_gedent_home() -> Result<PathBuf, Error> {
-    let home_dir = std::env::var_os("HOME").ok_or(anyhow!("Error fetching home directory"))?;
-    // TODO: make this system agnostic in the future - only works in linux
-    // I saw a dir crate that may help
-    // https://docs.rs/dirs/latest/dirs/fn.config_dir.html
-    let gedent_home: PathBuf = [home_dir, Into::into(".config/gedent")].iter().collect();
-    Ok(gedent_home)
+    let mut config_dir = config_dir().ok_or(anyhow!("Cant retrieve gedent home"))?;
+    config_dir.push("gedent");
+    Ok(config_dir)
 }
 
 fn select_key(config: &Config) -> Result<String, Error> {
