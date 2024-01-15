@@ -1,3 +1,6 @@
+--@
+extension = "run"
+--@
 AMS_JOBNAME={{ molecule.filename }} $AMSBIN/ams <<eor
 
 Task SinglePoint

@@ -8,8 +8,11 @@ As the needs for molecular dynamics software is much more diverse, `gedent` does
 not aim to provide specific capabilites for this kind of software for now. (In the future, maybe?)
 
 `gedent` aims to provide a paradigm of configurations and templates for software 
-such as [XTB](https://xtb-docs.readthedocs.io/en/latest/), [orca](https://www.faccts.de/orca/), 
-[ADF](https://www.scm.com/), [Gaussian](https://gaussian.com/), [NWChem](https://www.nwchem-sw.org/) 
+such as [XTB](https://xtb-docs.readthedocs.io/en/latest/), 
+[orca](https://www.faccts.de/orca/), 
+[ADF](https://www.scm.com/), 
+[Gaussian](https://gaussian.com/), 
+[NWChem](https://www.nwchem-sw.org/) 
 and similar chemistry software suites. 
 
 Although it aims to support such software and was thought with this
@@ -32,7 +35,8 @@ and [Cargo](https://doc.rust-lang.org/cargo/),
 the package manager for Rust,
 installed.
 
-If you dont already have rust and cargo installed, you can [install them with rustup](https://www.rust-lang.org/tools/install):
+If you dont already have rust and cargo installed, you can
+[install them with rustup](https://www.rust-lang.org/tools/install):
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -75,8 +79,9 @@ cargo build --release
 After building,
 the binary will be located at `target/release/gedent`.
 
-Do note that the config directory is not create this way, so if you're on linux, please create the 
-~/.config/gedent directory and copy the appropriate files and directories there:
+Do note that the config directory is not create this way, so if you're on linux,
+please create the  ~/.config/gedent directory and copy the appropriate files 
+and directories there:
 
 ```bash
 mkdir ~/.config/gedent
@@ -88,7 +93,8 @@ cp $PWD/gedent.toml ~/.config/gedent/
 ## Configuration
 
 `gedent` offers support for a per-project configuration file, it searches previous 
-directories (until the user home folder) and if no config is found (a gedent.toml file) it uses the 
+directories (until the user home folder) and if no config is found 
+(a gedent.toml file) it uses the 
 default config location (`~/.config/gedent` in linux).
 
 Pairing the user defined config file with the power of [TERA templates](https://keats.github.io/tera/)
@@ -102,17 +108,78 @@ shipped with the program.
 
 ## Templates tutorial
 
-### Getting started   
-To understand the full functionalities of the templates, please visit [the tera templates documentation](https://keats.github.io/tera/docs/#getting-started)
-, which offers a comprehensive guide on the capabilities of the tera template language. It is heavily based on [Jinja2](https://jinja.palletsprojects.com/en/3.1.x/)
-and [Django](https://docs.djangoproject.com/en/5.0/ref/templates/language/) template languages, so if you know
+### Getting started
+
+To understand the full functionalities of the templates, please visit
+[the tera templates documentation](https://keats.github.io/tera/docs/#getting-started)
+, which offers a comprehensive guide on the capabilities of the tera template language. 
+It is heavily based on the [Jinja2](https://jinja.palletsprojects.com/en/3.1.x/)
+and [Django](https://docs.djangoproject.com/en/5.0/ref/templates/language/) 
+template languages, so if you know
 any of these you will feel right at home.
 
+### Creating new templates
 
+To create new templates, you can add a base template in the `presets` directory, then call gedent:
+```bash
+gedent template new "new_template_name"
+```
 
-## Basic workflow
+If you call it without the preset name, a fuzzy dialogue box will open for 
+you to select what preset to use for your new template. It is then opened 
+in your default to editor for you to modify it.
 
-## Examples
+Right now, we ship the following basic template presets with `gedent`:
+- [orca](https://www.faccts.de/orca/)
+- [ADF](https://www.scm.com/) 
+- [Gaussian](https://gaussian.com/) 
+- [NWChem](https://www.nwchem-sw.org/) 
+
+Although these are shipped by default, you are encouraged to create your own base presets. 
+(or even remove the ones shipped by default, if you dont use them)
+
+The only gedent-specific features in the templates are:
+- the metadata header
+On top of any template file you use the special delimiter `--@` encloses the template metada,
+it can be in any place of the input, although it is encoraged to keep it at the top. 
+Right now, the only supported metadata is the `extension`
+directive, where it sets the default extension for the file, but there are plans to support templates
+with more than 1 xyz file per template.
+
+An example of the template metada looks as follows:
+
+```toml
+--@
+extension = "inp"
+--@
+```
+
+It is provided in [TOML](https://toml.io/en/) style syntax.
+
+### Basic tera template usage
+
+A Tera template is just a text file where variables and expressions 
+get replaced with values when it is rendered. 
+The syntax is based on Jinja2 and Django templates.
+
+There are 3 kinds of delimiters and those cannot be changed:
+
+- `{{` and `}}` for expressions
+- `{%` and `%}` for statements
+- `{#` and `#}` for comments
+
+### Available functions
+
+On top of the already built-in tera 
+[functions](https://keats.github.io/tera/docs/#built-in-functions) and [filters](https://keats.github.io/tera/docs/#built-in-filters)
+there are two more available functions as of now:
+`print_molecule(molecule: Molecule)` and `split_molecule(molecule: Molecule, index: int)`.
+
+`print_molecule`
+
+## Example templates
+
+[shipped templates](./templates)
 
 ## Contributing
 
