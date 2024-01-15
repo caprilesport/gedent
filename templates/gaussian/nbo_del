@@ -1,0 +1,16 @@
+--@
+extension = "gjf"
+--@
+%chk={{ molecule.filename }}.chk
+%nproc={{ nprocs }}
+%mem={{ memory }}GB
+# {{ dft_level }}/{{ dft_basis_set }} pop=nbo6del nosymm
+
+job title: {{ molecule.filename }}
+
+{{ charge }} {{mult}}
+{{print_molecule(molecule=molecule)}}
+
+$nbo  $end
+$del  lewis  $end
+
