@@ -44,9 +44,6 @@ enum Mode {
     Gen {
         /// The template to look for in ~/.config/gedent/templates
         template_name: String,
-        // TODO: Add some common parameters as flags:
-        // Solvation, charge, mult, theory level, basis set (what else?)
-        // Last arguments are the required xyz files
         // TODO: Make this a flag
         /// xyz files
         #[arg(value_name = "XYZ files")]
@@ -54,6 +51,15 @@ enum Mode {
         /// Print to screen and don't save file
         #[arg(short, long, default_value_t = false)]
         print: bool,
+        /// Set solvent to value and solvation to true
+        #[arg(short, long, default_value = None)]
+        solvent: Option<String>,
+        /// Set charge
+        #[arg(short, long, default_value = None)]
+        charge: Option<usize>,
+        /// Set multiplicity
+        #[arg(short, long, default_value = None)]
+        mult: Option<usize>,
     },
     // Subcommand to deal with configurations
     /// Access gedent configuration
@@ -153,6 +159,9 @@ fn main() -> Result<()> {
             template_name,
             xyz_files,
             print,
+            solvent,
+            charge,
+            mult,
         } => {
             let mut molecules: Vec<Molecule> = vec![];
             if let Some(files) = xyz_files {
@@ -161,7 +170,7 @@ fn main() -> Result<()> {
                 }
             };
             let template = Template::get(template_name)?;
-            let results = generate_input(template, molecules)?;
+            let results = generate_input(template, molecules, solvent, mult, charge)?;
             for input in results {
                 if print {
                     println!("{}", input.content);
@@ -231,7 +240,7 @@ fn main() -> Result<()> {
                     Some(software) => software,
                     None => select_software()?,
                 };
-                Template::new(software, template_name)?
+                Template::from_preset(software, template_name)?
             }
             TemplateSubcommand::List {} => Template::list_templates()?,
             TemplateSubcommand::Edit { template } => {
@@ -317,11 +326,30 @@ fn gedent_init(config: Option<PathBuf>) -> Result<(), Error> {
     Ok(())
 }
 
-fn generate_input(template: Template, molecules: Vec<Molecule>) -> Result<Vec<Input>, Error> {
+fn generate_input(
+    template: Template,
+    molecules: Vec<Molecule>,
+    solvent: Option<String>,
+    mult: Option<usize>,
+    charge: Option<usize>,
+) -> Result<Vec<Input>, Error> {
     let mut context = tera::Context::new();
     let config = Config::get()?;
     for (key, value) in config.parameters {
         context.insert(key, &value);
+    }
+
+    if let Some(solvent) = solvent {
+        context.insert("solvation", &true);
+        context.insert("solvent", &solvent);
+    }
+
+    if let Some(mult) = mult {
+        context.insert("multiplicity", &mult);
+    }
+
+    if let Some(charge) = charge {
+        context.insert("charge", &charge);
     }
 
     let extension = match &template.options.extension {
