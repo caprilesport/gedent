@@ -94,7 +94,35 @@ default config location (`~/.config/gedent` in linux).
 Pairing the user defined config file with the power of [TERA templates](https://keats.github.io/tera/)
 gives rise to a rich system of input generation.
 
-## Templates
+The config file accepts any keys, and is composed of a `[gedent]` block, which as of now
+only supports a default extension, and a user defined `[parameters]` section, which can be 
+accessed by templates. A default config 
+file is provided by gedent with some example defaults for the templates that are 
+shipped with the program.
+
+## Templates tutorial
+
+### Getting started   
+To understand the full functionalities of the templates, please visit [the tera templates documentation](https://keats.github.io/tera/docs/#getting-started)
+, which offers a comprehensive guide on the capabilities of the tera template language. It is heavily based on [Jinja2](https://jinja.palletsprojects.com/en/3.1.x/)
+and [Django](https://docs.djangoproject.com/en/5.0/ref/templates/language/) template languages, so if you know
+any of these you will feel right at home.
+
+
+
+## Basic workflow
 
 ## Examples
 
+## Contributing
+
+Contributions to `gedent` are welcome!
+If you find a bug,
+have a feature request,
+or want to contribute code,
+please [open an issue](https://github.com/caprilesport/gedent/issues/new)
+or [a pull request](https://github.com/caprilesport/gedent/pulls).
+
+## License
+
+`gedent` is released under the [MIT License](LICENSE).
