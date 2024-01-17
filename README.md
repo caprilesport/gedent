@@ -27,32 +27,26 @@ features that support your needs.
 
 ### Requirements
 
-Before installing `gedent`
-you need to make sure you have
-[Rust](https://www.rust-lang.org/tools/install) (version 1.65.0 or later)
-and [Cargo](https://doc.rust-lang.org/cargo/),
-the package manager for Rust,
-installed.
+Before installing `gedent`, ensure that you have the following prerequisites:
 
-If you dont already have rust and cargo installed, you can
-[install them with rustup](https://www.rust-lang.org/tools/install):
+- [Rust](https://www.rust-lang.org/tools/install) (version 1.65.0 or later)
+- [Cargo](https://doc.rust-lang.org/cargo/), the Rust package manager
+
+If Rust and Cargo are not already installed, you can conveniently set them up using the following one-liner:
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-### From [crates.io](https://crates.io/crates/gedent) 
+### Installing from [crates.io](https://crates.io/crates/gedent)
 
-Once you have Rust and Cargo installed,
-you can install `gedent` from [crates.io](https://crates.io/) using Cargo:
+Once Rust and Cargo are in place, `gedent` can be installed from [crates.io](https://crates.io/) using Cargo:
 
 ```bash
 cargo install gedent
 ```
 
-This will download the necessary dependencies,
-compile the `gedent` binary,
-and install it in your system.
+This command downloads necessary dependencies, compiles the `gedent` binary, and installs it on your system.
 
 ### Directly from [GitHub](https://github.com/caprilesport/gedent)
 
@@ -81,19 +75,16 @@ the binary will be located at `target/release/gedent`.
 
 ## Configuration
 
-`gedent` offers support for a per-project configuration file, it searches previous 
-directories and if no config file - a 
-a gedent.toml file - is found, it uses the 
-default config location (`~/.config/gedent` in linux).
+`gedent` supports per-project configuration files. If no config file (`gedent.toml`) is found in the current directory or its parent directories, the tool defaults to using the configuration at `~/.config/gedent` on Linux.
+
+If you want to modify the parameters in the config just for the current folder (or for any subfolder in it), you can clone the current in-use configuration file by using:
+
+```bash
+gedent init
+```
 
 Pairing the user defined config file with the power of [TERA templates](https://keats.github.io/tera/)
 gives rise to a rich system of input generation.
-
-The config file accepts any keys, and is composed of a `[gedent]` block, which as of now
-only supports a default extension, and a user defined `[parameters]` section, which can be 
-accessed by templates. A default config 
-file is provided by gedent with some example defaults for the templates that are 
-shipped with the program.
 
 Here is an example configuration for `gedent`:
 
@@ -110,17 +101,18 @@ random_field = "any valid toml data"
 other_named_key = [100, 38, 29]
 ```
 
+The `[gedent]` block contains default settings, and the `[parameters]` section allows user-defined configurations accessed by templates.
+
+A default config file is provided by gedent with some example defaults for the templates that are shipped with the program.
+
+
 ## Templates basics
 
-In general, to interact with the templates `gedent` has a `template` subcommand.
-With it you can create, edit, list and print templates.
+In `gedent`, templates play a central role in generating the inputs. The `template` subcommand facilitates template management.
 
 ### Getting started
 
-To understand the full functionalities of the templates, please visit
-[the tera templates documentation](https://keats.github.io/tera/docs/#getting-started)
-, which offers a comprehensive guide on the capabilities of the tera template language. 
-It is heavily based on the [Jinja2](https://jinja.palletsprojects.com/en/3.1.x/)
+For a comprehensive guide on template capabilities, refer to the [Tera templates documentation](https://keats.github.io/tera/docs/#getting-started).It is heavily based on the [Jinja2](https://jinja.palletsprojects.com/en/3.1.x/)
 and [Django](https://docs.djangoproject.com/en/5.0/ref/templates/language/) 
 template languages, so if you know
 any of these you will feel right at home.
@@ -128,30 +120,25 @@ any of these you will feel right at home.
 ### Creating new templates
 
 To create new templates, you can add a base template in the `presets` directory, then call gedent:
+
 ```bash
 gedent template new "new_template_name"
 ```
 
-If you call it without the preset name, a fuzzy dialogue box will open for 
-you to select what preset to use for your new template. It is then opened 
-in your default to editor for you to modify it.
+If no preset name is provided, a fuzzy dialogue box assists in selecting a preset for your new template. The template is then opened in your default editor for modification.
 
-Right now, we ship the following basic template presets with `gedent`:
+`gedent` ships with default template presets for popular chemistry software, but users are encouraged to create custom base presets.
+Right now, we ship the following basic template presets (if your favorite software is not supported, please [open a pull-request](https://github.com/caprilesport/gedent/issues/new)):
 - [orca](https://www.faccts.de/orca/)
 - [ADF](https://www.scm.com/) 
 - [Gaussian](https://gaussian.com/) 
 - [NWChem](https://www.nwchem-sw.org/) 
 
-Although these are shipped by default, you are encouraged to create your own base presets. 
+#### Template Metadata
 
-The only gedent-specific features in the templates is the metadata header.
-On any template file if you use the special delimiter `--@` enclosing the template metada,
-which can be placed anywhere in the input. 
-Right now, the only supported metadata is the `extension`
-directive, where it sets the default extension for the file, but there are plans to support templates
-with more than 1 xyz file per template, for exemple.
+Templates support a metadata header using the `--@` delimiter. Presently, the only supported metadata is the `extension` directive, setting the default file extension. Future releases plan to support templates with more than one XYZ file per template.
 
-An example of the template metada looks like this:
+Example template metadata:
 
 ```toml
 --@
@@ -159,132 +146,134 @@ extension = "inp"
 --@
 ```
 
-It is provided in [TOML](https://toml.io/en/) style syntax.
+The metadata uses [TOML](https://toml.io/en/) syntax.
 
-### Rendering templates
 
-The only accepted format in this release is the `.xyz` format. If you have a system
-written in another format, [openbabel](https://openbabel.org/) is a great tool to convert it
-to the `.xyz` format.
+### Template rendering
 
-Once you have a coordinates file and a template, generating a new input is as easy as:
+`gedent` renders templates using the `.xyz` format, and users can leverage [openbabel](https://openbabel.org/) for format conversion if needed. Generating an input file is straightforward:
 
 ```bash
 gedent gen `name_of_template` example.xyz
 ```
 
-Wildcards are also available, so `gedent gen orca/opt *.xyz` works as well.
-If you're unsure about the template name `gedent template list` lists all your 
-available templates.
+Wildcard support is available, allowing commands like `gedent gen orca/opt *.xyz`. Use `gedent template list` to view all available templates.
 
 ### The molecule object
 
-`gedent` parses a xyz file to a `Molecule` object, which has the following fields:
-- `filename`: The xyz filename without extension.
-- `description`: The second line in the header of the xyz coordinates.
-- `atoms`: A `String` array of each line of the coordinates.
-
-#### Functions defined on the `Molecule` object
-
+`gedent` parses an XYZ file into a `Molecule` object, which includes the following fields: `filename`, `description`, and `atoms`. 
 On top of the already built-in tera 
-[functions](https://keats.github.io/tera/docs/#built-in-functions) and [filters](https://keats.github.io/tera/docs/#built-in-filters)
-there are two more available functions as of now:
-`print_molecule(molecule: Molecule)` and `split_molecule(molecule: Molecule, index: integer)`, which
-were made in order to ease a little bit the procces of writing some inputs.
+[functions](https://keats.github.io/tera/docs/#built-in-functions) and [filters](https://keats.github.io/tera/docs/#built-in-filters) two additional functions that receive a Molecule are provided, `print_molecule` and `split_molecule`.
+
+Example `Molecule` object fields:
+
+```bash
+filename: example
+description: Sample XYZ file
+atoms: ["O  0.0  0.0  0.0", "H  0.0  1.0  0.0", "H  1.0  0.0  0.0"]
+```
 
 ### Workflow example
 
 #### Orca optimization
 
-Suppose we want to use [orca](https://www.faccts.de/orca/) to optimize a water molecule, and it's the first time 
-we're using gedent.
+Let's walk through an example using `gedent` to generate an input file for optimizing a water molecule with [Orca](https://www.faccts.de/orca/).
 
-We could first create a new template based on the `orca` preset:
+1. **Create a New Template:**
+   ```bash
+   gedent template new opt orca
+   ```
+   This command generates a new template named `opt` based on the `orca` preset and opens the file in your default editor.
 
-```bash
-gedent template new opt orca
-```
+2. **Edit the Template:**
+   With the generated template open in your editor, modify it to fit the optimization scenario. For example:
 
-This will create the `opt` template, based on the `orca` preset, and open it 
-in your default editor. We can now edit the template to have something like the following:
+   ```bash
+   --@
+   extension = "inp"
+   --@
+   ! {{ functional }} {{ basis_set }}
+   ! Opt freq
 
-```bash
---@
-extension = "inp"
---@
-! {{ functional }} {{ basis_set }}
-! Opt freq
+   %pal
+    nprocs {{ nprocs }}
+   end
 
-%pal
- nprocs {{ nprocs }}
-end
+   %maxcore {{ memory }}
 
-%maxcore {{ memory }}
+   *xyz {{ charge }} {{ mult }}
+   {{ print_molecule(molecule = Molecule) }}
+   *
+   ```
 
-*xyz {{ charge }} {{ mult }}
-{{ print_molecule(molecule = Molecule) }}
-*
-```
-
-Now we need just to make sure we have all the correct parameters in our config to generate
-this input. We can look at that with the `config` subcommand:
-
-```bash
-gedent config print
-```
-
-Which will print something like this:
-
-```toml
-charge = 1
-basis_set = "def2svp"
-functional = "BP86"
-dft_type = "GGA"
-memory = 3000
-mult = 1
-nprocs = 8
-solvation = false
-solvent = "water"
-start_hessian = false
-```
-
-So it seems like it's all set, except for the charge which should be 0, we can change that with:
-
-```bash
-gedent config set
-```
-Which will let us pick the parameter and change it's value. Now that we're all set we can finally 
-generate our optimization input:
-(Sidenote: We could also have used the `-c` flag in the `gen` command)
+3. **Review Configuration:**
+   Ensure the configuration parameters match the requirements. Check the configuration using:
+   ```bash
+   gedent config print
+   ```
 
 
-```bash
-gedent gen opt h2o.xyz
-```
+   Which will print something like this:
 
-And we will obtain:
+   ```toml
+   charge = 1
+   basis_set = "def2svp"
+   functional = "BP86"
+   dft_type = "GGA"
+   memory = 3000
+   mult = 1
+   nprocs = 8
+   solvation = false
+   solvent = "water"
+   start_hessian = false
+   ```
 
-```bash
-! BP86 def2svp
-! Opt freq D3BJ
+4. **Adjust Configuration:**
+   If needed, modify the configuration using:
+   ```bash
+   gedent config set
+   ```
 
-%pal
- nprocs 8
-end
+5. **Generate Optimization Input:**
+   ```bash
+   gedent gen opt h2o.xyz
+   ```
+   This generates the optimization input based on the template and specified XYZ coordinates.
 
-%maxcore 3000
 
-*xyz 0 1
-O       -0.981036882      0.000000000     -2.282900972
-H       -0.981036882      0.759337000     -1.686857972
-H       -0.981036882     -0.759337000     -1.686857972
-*
-```
+   Which yields: 
+
+   ```bash
+   ! BP86 def2svp
+   ! Opt freq D3BJ
+
+   %pal
+    nprocs 8
+   end
+
+   %maxcore 3000
+
+   *xyz 0 1
+   O       -0.981036882      0.000000000     -2.282900972
+   H       -0.981036882      0.759337000     -1.686857972
+   H       -0.981036882     -0.759337000     -1.686857972
+   *
+   ```
 
 ## Example templates
 
-To have an idea on how to create some simple inputs, check out the 
-[shipped templates](./templates) or the [shipped presets](./presets).
+To understand how to create inputs with `gedent`, explore the shipped templates in the [templates directory](./templates) or the [presets](./presets). These examples serve as valuable references for creating your custom templates.
+
+
+## Interactive Help
+
+For quick access to command summaries and options, utilize the `--help` flag. For example:
+
+```bash
+gedent --help
+gedent template --help
+gedent gen --help
+```
 
 ## Contributing
 
@@ -295,6 +284,15 @@ or want to contribute code,
 please [open an issue](https://github.com/caprilesport/gedent/issues/new)
 or [a pull request](https://github.com/caprilesport/gedent/pulls).
 
+## Acknowledgments
+
+`gedent` was built on top of the following amazing crates:
+
+- [TERA](https://github.com/Keats/tera)
+- [Dialoguer](https://github.com/console-rs/dialoguer)
+
 ## License
 
 `gedent` is released under the [MIT License](LICENSE).
+
+
