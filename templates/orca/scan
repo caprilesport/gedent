@@ -1,4 +1,4 @@
-! {{ dft_level }} {{ dft_basis_set }} 
+! {{ functional }} {{ basis_set }} 
 ! Opt
 
 {% if solvation -%}

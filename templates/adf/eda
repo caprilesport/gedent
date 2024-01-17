@@ -26,7 +26,7 @@ Engine adf
 	end
 
 	Basis
-		type {{ dft_basis_set }}
+		type {{ basis_set }}
 		CORE none
 	end
 
@@ -34,7 +34,7 @@ Engine adf
 
 	XC
 		Dispersion Grimme3 BJDAMP
-		{{ dft_type }} {{ dft_level }}
+		{{ functional_class }} {{ functional }}
 	end
 
 	Beckegrid

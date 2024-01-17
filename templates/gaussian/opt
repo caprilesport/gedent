@@ -9,7 +9,7 @@ extension = "gjf"
 %chk={{ molecule.filename }}.chk
 %nproc={{ nprocs }}
 %mem={{ memory }}GB
-# {{ dft_level }}/{{ dft_basis_set }} opt freq=noraman {{ solvent }}
+# {{ functional }}/{{ basis_set }} opt freq=noraman {{ solvent }}
 
 job title: {{ molecule.filename }}
 
