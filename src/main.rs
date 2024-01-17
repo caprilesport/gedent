@@ -45,7 +45,6 @@ enum Mode {
     Gen {
         /// The template to look for in ~/.config/gedent/templates
         template_name: String,
-        // TODO: Make this a flag
         /// xyz files
         #[arg(value_name = "XYZ files")]
         xyz_files: Option<Vec<PathBuf>>,
@@ -78,10 +77,7 @@ enum Mode {
     },
     // Subcommand for init gedent "repo"
     /// Initiate a gedent project in the current directory.
-    Init {
-        // optional config to create when initiating the gedent repo
-        config: Option<PathBuf>,
-    },
+    Init { config: Option<PathBuf> },
 }
 
 #[derive(Debug, Subcommand)]
@@ -89,7 +85,7 @@ enum TemplateSubcommand {
     /// Prints the unformatted template to stdout
     #[command(alias = "p")]
     Print {
-        // name of template to search for
+        /// Name of template to print.
         template: Option<String>,
     },
     /// Create a new template from a preset located in ~/.config/gedent/presets
@@ -98,7 +94,9 @@ enum TemplateSubcommand {
         // templates for a simple singlepoint in the following softwares:
         // ADF, GAMESSUS, GAMESSUK, Gaussian, MOLPRO, NWChem, ORCA
         // also, template will be added in .gedent folder
+        /// The name of the generated template.
         template_name: String,
+        /// The preset to use as base for the template.
         software: Option<String>,
     },
     /// List available templates
@@ -110,8 +108,9 @@ enum TemplateSubcommand {
         // $XDG_CONFIG
     },
     /// Edit a given template
+    #[command(alias = "e")]
     Edit {
-        // opens a given template in $EDITOR
+        /// Template to open in $EDITOR
         template: Option<String>,
     },
 }
@@ -126,6 +125,7 @@ enum ConfigSubcommand {
         location: bool,
     },
     /// Sets key to value in the config file, keeps the same type as was setted.
+    #[command(alias = "s")]
     Set {
         /// Key to be added
         key: Option<String>,
@@ -133,6 +133,7 @@ enum ConfigSubcommand {
         value: Option<String>,
     },
     /// Adds a key, value to the config file, for typed values use an option
+    #[command(alias = "a")]
     Add {
         /// Key to be added
         key: String,
@@ -143,6 +144,7 @@ enum ConfigSubcommand {
         toml_type: crate::config::ArgType,
     },
     /// Deletes a certain key in the configuration
+    #[command(alias = "d")]
     Del {
         /// Key to be deleted.
         key: Option<String>,
