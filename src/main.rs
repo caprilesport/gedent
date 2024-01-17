@@ -370,7 +370,7 @@ fn generate_input(
 
     for molecule in molecules {
         let mut mol_context = context.clone();
-        mol_context.insert("molecule", &molecule);
+        mol_context.insert("Molecule", &molecule);
         results.push(Input {
             filename: PathBuf::from(molecule.filename).with_extension(extension),
             content: template.render(&mol_context)?,
