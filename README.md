@@ -95,7 +95,25 @@ accessed by templates. A default config
 file is provided by gedent with some example defaults for the templates that are 
 shipped with the program.
 
-## Templates tutorial
+Here is an example configuration for `gedent`:
+
+```toml
+[gedent]
+default_extension = "gjf"
+
+[parameters]
+charge = 1
+mult = 1
+solvation = true
+solvent = "dmso"
+random_field = "any valid toml data"
+other_named_key = [100, 38, 29]
+```
+
+## Templates basics
+
+In general, to interact with the templates `gedent` has a `template` subcommand.
+With it you can create, edit, list and print templates.
 
 ### Getting started
 
@@ -143,30 +161,130 @@ extension = "inp"
 
 It is provided in [TOML](https://toml.io/en/) style syntax.
 
-### Basic tera template usage
+### Rendering templates
 
-A Tera template is just a text file where variables and expressions 
-get replaced with values when it is rendered. 
-The syntax is based on Jinja2 and Django templates.
+The only accepted format in this release is the `.xyz` format. If you have a system
+written in another format, [openbabel](https://openbabel.org/) is a great tool to convert it
+to the `.xyz` format.
 
-There are 3 kinds of delimiters and those cannot be changed:
+Once you have a coordinates file and a template, generating a new input is as easy as:
 
-- `{{` and `}}` for expressions
-- `{%` and `%}` for statements
-- `{#` and `#}` for comments
+```bash
+gedent gen `name_of_template` example.xyz
+```
 
-### Available functions
+Wildcards are also available, so `gedent gen orca/opt *.xyz` works as well.
+If you're unsure about the template name `gedent template list` lists all your 
+available templates.
+
+### The molecule object
+
+`gedent` parses a xyz file to a `Molecule` object, which has the following fields:
+- `filename`: The xyz filename without extension.
+- `description`: The second line in the header of the xyz coordinates.
+- `atoms`: A `String` array of each line of the coordinates.
+
+#### Functions defined on the `Molecule` object
 
 On top of the already built-in tera 
 [functions](https://keats.github.io/tera/docs/#built-in-functions) and [filters](https://keats.github.io/tera/docs/#built-in-filters)
 there are two more available functions as of now:
-`print_molecule(molecule: Molecule)` and `split_molecule(molecule: Molecule, index: int)`.
+`print_molecule(molecule: Molecule)` and `split_molecule(molecule: Molecule, index: integer)`, which
+were made in order to ease a little bit the procces of writing some inputs.
 
-`print_molecule`
+### Workflow example
+
+#### Orca optimization
+
+Suppose we want to use [orca](https://www.faccts.de/orca/) to optimize a water molecule, and it's the first time 
+we're using gedent.
+
+We could first create a new template based on the `orca` preset:
+
+```bash
+gedent template new opt orca
+```
+
+This will create the `opt` template, based on the `orca` preset, and open it 
+in your default editor. We can now edit the template to have something like the following:
+
+```bash
+--@
+extension = "inp"
+--@
+! {{ functional }} {{ basis_set }}
+! Opt freq
+
+%pal
+ nprocs {{ nprocs }}
+end
+
+%maxcore {{ memory }}
+
+*xyz {{ charge }} {{ mult }}
+{{ print_molecule(molecule = Molecule) }}
+*
+```
+
+Now we need just to make sure we have all the correct parameters in our config to generate
+this input. We can look at that with the `config` subcommand:
+
+```bash
+gedent config print
+```
+
+Which will print something like this:
+
+```toml
+charge = 1
+basis_set = "def2svp"
+functional = "BP86"
+dft_type = "GGA"
+memory = 3000
+mult = 1
+nprocs = 8
+solvation = false
+solvent = "water"
+start_hessian = false
+```
+
+So it seems like it's all set, except for the charge which should be 0, we can change that with:
+
+```bash
+gedent config set
+```
+Which will let us pick the parameter and change it's value. Now that we're all set we can finally 
+generate our optimization input:
+(Sidenote: We could also have used the `-c` flag in the `gen` command)
+
+
+```bash
+gedent gen opt h2o.xyz
+```
+
+And we will obtain:
+
+```bash
+! BP86 def2svp
+! Opt freq D3BJ
+
+%pal
+ nprocs 8
+end
+
+%maxcore 3000
+
+*xyz 0 1
+O       -0.981036882      0.000000000     -2.282900972
+H       -0.981036882      0.759337000     -1.686857972
+H       -0.981036882     -0.759337000     -1.686857972
+*
+```
 
 ## Example templates
 
-[shipped templates](./templates)
+To have an idea on how to create some simple inputs, check out the 
+[shipped templates](./templates) or the [shipped presets](./presets).
 
 ## Contributing
 
