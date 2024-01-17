@@ -10,8 +10,8 @@ extension = "gjf"
 %mem={{ memory }}GB
 # {{ dft_level }}/{{ dft_basis_set }} freq=noraman scrf=(smd,solvent=ethanol) temperature=353
 
-job title: {{ molecule.filename }}
+job title: {{ Molecule.filename }}
 
 {{ charge }} {{mult}}
-{{print_molecule(molecule=molecule)}}
+{{print_molecule(molecule=Molecule)}}
 

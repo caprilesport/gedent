@@ -6,13 +6,13 @@ extension = "gjf"
 {%else-%}
 {%set solvent=""-%}
 {%endif-%}
-%chk={{ molecule.filename }}.chk
+%chk={{ Molecule.filename }}.chk
 %nproc={{ nprocs }}
 %mem={{ memory }}GB
 # {{ dft_level }}/{{ dft_basis_set }} opt freq=noraman {{ solvent }}
 
-job title: {{ molecule.filename }}
+job title: {{ Molecule.filename }}
 
 {{ charge }} {{mult}}
-{{print_molecule(molecule=molecule)}}
+{{print_molecule(molecule=Molecule)}}
 

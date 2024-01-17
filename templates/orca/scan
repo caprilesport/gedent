@@ -16,5 +16,5 @@ end
 end
 
 *xyz {{ charge }} {{ mult }}
-{{ print_molecule(molecule="molecule") }}
+{{ print_molecule(molecule="Molecule") }}
 *

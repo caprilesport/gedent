@@ -21,11 +21,11 @@ end
 {% if start_hessian -%}
 %Geom
  InHess Read
- InHessName "{{ molecule.filename }}.hess"
+ InHessName "{{ Molecule.filename }}.hess"
 end
 
 {% endif -%} 
 
 *xyz {{ charge }} {{ mult }}
-{{ print_molecule(molecule = molecule) }}
+{{ print_molecule(molecule = Molecule) }}
 *

@@ -1,12 +1,12 @@
 --@
 extension = "run"
 --@
-AMS_JOBNAME={{ molecule.filename }} $AMSBIN/ams <<eor
+AMS_JOBNAME={{ Molecule.filename }} $AMSBIN/ams <<eor
 
 Task SinglePoint
 
 Engine ADF
-	title {{ molecule.filename }}
+	title {{ Molecule.filename }}
 
 	BASIS
 		TYPE {{ dft_basis_set }}
@@ -30,7 +30,7 @@ EndEngine
 
 System
 	atoms
-{{ print_molecule(molecule=molecule) }}
+{{ print_molecule(molecule=Molecule) }}
 	end
 		Charge {{ charge }}
 	end
