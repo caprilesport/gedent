@@ -5,7 +5,7 @@ use std::path::PathBuf;
 #[derive(PartialEq, Serialize, Deserialize, Debug, Clone)]
 pub struct Molecule {
     pub filename: String,
-    pub annotations: String,
+    pub description: String,
     pub atoms: Vec<String>,
 }
 
@@ -13,7 +13,7 @@ impl Molecule {
     fn new() -> Molecule {
         Molecule {
             filename: "".to_string(),
-            annotations: "".to_string(),
+            description: "".to_string(),
             atoms: Vec::new(),
         }
     }
@@ -85,7 +85,7 @@ impl Molecule {
                 }
 
                 natoms += xyz_lines.next().unwrap().parse::<usize>()?;
-                mol.annotations = xyz_lines.next().unwrap_or("").to_string();
+                mol.description = xyz_lines.next().unwrap_or("").to_string();
                 mol.atoms.clear();
             } else {
                 mol.atoms.push(xyz_lines.next().unwrap().to_string());
@@ -131,7 +131,7 @@ H       -1.537653553     -0.759337000     -2.285220893"
 
         let ch4 = Molecule {
             filename: "./ch4".to_string(),
-            annotations: "symmetry c1".to_string(),
+            description: "symmetry c1".to_string(),
             atoms: vec![
                 "C       -0.702728547      0.000000000     -1.996862306".to_string(),
                 "H       -0.172294601     -0.951333822     -1.920672276".to_string(),
@@ -142,7 +142,7 @@ H       -1.537653553     -0.759337000     -2.285220893"
         };
         let h2o = Molecule {
             filename: "./ch4_h2o_1".to_string(),
-            annotations: "symmetry c1".to_string(),
+            description: "symmetry c1".to_string(),
             atoms: vec![
                 "O       -1.537653553      0.000000000     -2.881263893".to_string(),
                 "H       -1.537653553      0.759337000     -2.285220893".to_string(),
@@ -170,7 +170,7 @@ H       -1.537653553     -0.759337000     -2.285220893"
     fn molecule_split_works() {
         let ch4 = Molecule {
             filename: "./ch4".to_string(),
-            annotations: "symmetry c1".to_string(),
+            description: "symmetry c1".to_string(),
             atoms: vec![
                 "C       -0.702728547      0.000000000     -1.996862306".to_string(),
                 "H       -0.172294601     -0.951333822     -1.920672276".to_string(),
@@ -182,7 +182,7 @@ H       -1.537653553     -0.759337000     -2.285220893"
 
         let ch3 = Molecule {
             filename: "./ch4_split_1".to_string(),
-            annotations: "symmetry c1".to_string(),
+            description: "symmetry c1".to_string(),
             atoms: vec![
                 "C       -0.702728547      0.000000000     -1.996862306".to_string(),
                 "H       -0.172294601     -0.951333822     -1.920672276".to_string(),
@@ -192,7 +192,7 @@ H       -1.537653553     -0.759337000     -2.285220893"
         };
         let h = Molecule {
             filename: "./ch4_split_2".to_string(),
-            annotations: "symmetry c1".to_string(),
+            description: "symmetry c1".to_string(),
             atoms: vec!["H       -1.233162492      0.045629756     -2.950150766".to_string()],
         };
         match ch4.split(4) {
