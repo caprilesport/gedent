@@ -219,7 +219,7 @@ Let's walk through an example using `gedent` to generate an input file for optim
    charge = 1
    basis_set = "def2svp"
    functional = "BP86"
-   dft_type = "GGA"
+   functional_class = "GGA"
    memory = 3000
    mult = 1
    nprocs = 8

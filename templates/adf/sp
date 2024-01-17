@@ -9,7 +9,7 @@ Engine ADF
 	title {{ Molecule.filename }}
 
 	BASIS
-		TYPE {{ dft_basis_set }}
+		TYPE {{ basis_set }}
 		CreateOutput yes
 	end
 
@@ -18,7 +18,7 @@ Engine ADF
 	end
 
 	XC
-		{{ dft_type }} {{ dft_level }}
+		{{ functional_class }} {{ functional }}
 		Dispersion Grimme3 BJDAMP
 	end
 

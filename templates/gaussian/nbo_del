@@ -4,7 +4,7 @@ extension = "gjf"
 %chk={{ Molecule.filename }}.chk
 %nproc={{ nprocs }}
 %mem={{ memory }}GB
-# {{ dft_level }}/{{ dft_basis_set }} pop=nbo6del nosymm
+# {{ functional }}/{{ basis_set }} pop=nbo6del nosymm
 
 job title: {{ Molecule.filename }}
 
