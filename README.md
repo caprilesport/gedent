@@ -4,8 +4,8 @@
 It strives to be simple and as general as possible, while contained in the
 boundaries of the quantum chemistry research. 
 
-As the needs for molecular dynamics software is much more diverse, `gedent` does
-not aim to provide specific capabilites for this kind of software for now. (In the future, maybe?)
+`gedent` stands for *gerador de entradas*, which is the portugues translation for 
+input generator. 🇧🇷
 
 `gedent` aims to provide a paradigm of configurations and templates for software 
 such as [XTB](https://xtb-docs.readthedocs.io/en/latest/), 
@@ -14,11 +14,10 @@ such as [XTB](https://xtb-docs.readthedocs.io/en/latest/),
 [Gaussian](https://gaussian.com/), 
 [NWChem](https://www.nwchem-sw.org/) 
 and similar chemistry software suites. 
-
-Although it aims to support such software and was thought with this
+ Although it aims to support such software and was thought with this
 use case in mind, it is a template CLI combined with a user defined configuration,
 so if you find another use for it, feel free to open a pull request with 
-features that support your needs, or clone the repo `=)`.
+features that support your needs.
 
 ## Is it any good?
 
@@ -28,7 +27,7 @@ features that support your needs, or clone the repo `=)`.
 
 ### Requirements
 
-Before installing `gedent`, through `cargo`
+Before installing `gedent`
 you need to make sure you have
 [Rust](https://www.rust-lang.org/tools/install) (version 1.65.0 or later)
 and [Cargo](https://doc.rust-lang.org/cargo/),
@@ -79,22 +78,12 @@ cargo build --release
 After building,
 the binary will be located at `target/release/gedent`.
 
-Do note that the config directory is not create this way, so if you're on linux,
-please create the  ~/.config/gedent directory and copy the appropriate files 
-and directories there:
-
-```bash
-mkdir ~/.config/gedent
-cp $PWD/templates ~/.config/gedent/
-cp $PWD/presets ~/.config/gedent/
-cp $PWD/gedent.toml ~/.config/gedent/
-```
 
 ## Configuration
 
 `gedent` offers support for a per-project configuration file, it searches previous 
-directories (until the user home folder) and if no config is found 
-(a gedent.toml file) it uses the 
+directories and if no config file - a 
+a gedent.toml file - is found, it uses the 
 default config location (`~/.config/gedent` in linux).
 
 Pairing the user defined config file with the power of [TERA templates](https://keats.github.io/tera/)
@@ -136,17 +125,15 @@ Right now, we ship the following basic template presets with `gedent`:
 - [NWChem](https://www.nwchem-sw.org/) 
 
 Although these are shipped by default, you are encouraged to create your own base presets. 
-(or even remove the ones shipped by default, if you dont use them)
 
-The only gedent-specific features in the templates are:
-- the metadata header
-On top of any template file you use the special delimiter `--@` encloses the template metada,
-it can be in any place of the input, although it is encoraged to keep it at the top. 
+The only gedent-specific features in the templates is the metadata header.
+On any template file if you use the special delimiter `--@` enclosing the template metada,
+which can be placed anywhere in the input. 
 Right now, the only supported metadata is the `extension`
 directive, where it sets the default extension for the file, but there are plans to support templates
-with more than 1 xyz file per template.
+with more than 1 xyz file per template, for exemple.
 
-An example of the template metada looks as follows:
+An example of the template metada looks like this:
 
 ```toml
 --@
