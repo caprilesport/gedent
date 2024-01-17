@@ -6,7 +6,7 @@ AMS_JOBNAME=eda $AMSBIN/ams <<eor
 Task SinglePoint
 
 Engine adf
-	title {{ molecule.filename }}
+	title {{ Molecule.filename }}
 
 	ETSNOCV
 		RHOKmin 1e-3
@@ -26,7 +26,7 @@ Engine adf
 	end
 
 	Basis
-		type {{ dft_basis_set }}
+		type {{ basis_set }}
 		CORE none
 	end
 
@@ -34,7 +34,7 @@ Engine adf
 
 	XC
 		Dispersion Grimme3 BJDAMP
-		{{ dft_type }} {{ dft_level }}
+		{{ functional_class }} {{ functional }}
 	end
 
 	Beckegrid
@@ -46,7 +46,7 @@ Engine adf
 		frag2 {{ get_env(name="PWD") }}/frag2.results/adf.rkf
 	end
 EndEngine
-{% set molecules = split_molecule(molecule=molecule, index=split_index) -%}
+{% set molecules = split_molecule(molecule=Molecule, index=split_index) -%}
 
 System
 	atoms

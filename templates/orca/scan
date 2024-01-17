@@ -1,4 +1,4 @@
-! {{ dft_level }} {{ dft_basis_set }} 
+! {{ functional }} {{ basis_set }} 
 ! Opt
 
 {% if solvation -%}
@@ -16,5 +16,5 @@ end
 end
 
 *xyz {{ charge }} {{ mult }}
-{{ print_molecule(molecule="molecule") }}
+{{ print_molecule(molecule="Molecule") }}
 *

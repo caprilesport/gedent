@@ -1,15 +1,15 @@
 --@
 extension = "gjf"
 --@
-%chk={{ molecule.filename }}.chk
+%chk={{ Molecule.filename }}.chk
 %nproc={{ nprocs }}
 %mem={{ memory }}GB
-# {{ dft_level }}/{{ dft_basis_set }} pop=nbo6del nosymm
+# {{ functional }}/{{ basis_set }} pop=nbo6del nosymm
 
-job title: {{ molecule.filename }}
+job title: {{ Molecule.filename }}
 
 {{ charge }} {{mult}}
-{{print_molecule(molecule=molecule)}}
+{{print_molecule(molecule=Molecule)}}
 
 $nbo  $end
 $del  lewis  $end
