@@ -38,29 +38,9 @@ If Rust and Cargo are not already installed, you can conveniently set them up us
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-### Installing from [crates.io](https://crates.io/crates/gedent)
+### Installation
 
-Once Rust and Cargo are in place, `gedent` can be installed from [crates.io](https://crates.io/) using Cargo:
-
-```bash
-cargo install gedent
-```
-
-This command downloads necessary dependencies, compiles the `gedent` binary, and installs it on your system.
-
-### Directly from [GitHub](https://github.com/caprilesport/gedent)
-
-Alternatively,
-you can install `gedent` directly from the GitHub repository
-using Cargo by running:
-
-```bash
-cargo install --git=https://github.com/caprilesport/gedent.git
-```
-
-### By cloning the GitHub repository
-
-You can also build `gedent` from source by cloning the GitHub repository
+To install `gedent` we will build it from source by cloning the GitHub repository
 and running `cargo build`:
 
 ```bash
@@ -70,8 +50,25 @@ cargo build --release
 ```
 
 After building,
-the binary will be located at `target/release/gedent`.
+the binary will be located at `target/release/gedent`, to make it available system-wide, 
+you can symlink it to somewhere in your `$PATH`, e.g.:
 
+```bash
+sudo ln -s $PWD/target/release/gedent /usr/local/bin
+```
+
+After installing, the only thing left to do is copy the `templates` and
+`presets` directories, as well as the gedent.toml file to your system 
+configuration directory. 
+
+### Linux and Mac
+
+```bash
+mkdir ~/.config/gedent
+cp -r ./templates ~/.config/gedent/
+cp -r ./presets ~/.config/gedent/
+cp ./gedent.toml ~/.config/gedent
+```
 
 ## Configuration
 
