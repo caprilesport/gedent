@@ -155,7 +155,6 @@ impl Template {
         ]
         .iter()
         .collect();
-        println!("{:?}", template_path);
         Ok(template_path)
     }
 
