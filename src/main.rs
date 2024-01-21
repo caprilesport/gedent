@@ -362,8 +362,13 @@ fn generate_input(
     let mut results: Vec<Input> = vec![];
 
     if molecules.is_empty() {
+        let filename = PathBuf::from(&template.name).with_extension(extension);
+        let filename = filename
+            .file_name()
+            .ok_or(anyhow!("Can't retrieve template name, exiting.."))?;
+
         results.push(Input {
-            filename: PathBuf::from(&template.name).with_extension(extension),
+            filename: PathBuf::from(filename),
             content: template.render(&context)?,
         });
     }
