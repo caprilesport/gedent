@@ -2,14 +2,13 @@
 default_extension = "inp"
 
 [parameters]
-charge = 1
 basis_set = "def2svp"
+charge = 1
 functional = "BP86"
-functional_class = "GGA" #required by adf
+functional_class = "GGA"
 memory = 3000
 mult = 1
 nprocs = 8
-solvation = false
-solvent = "water"
+solvent = "dmso"
 split_index = 10
 start_hessian = false
