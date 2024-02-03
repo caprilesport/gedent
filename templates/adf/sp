@@ -18,7 +18,7 @@ Engine ADF
 	end
 
 	XC
-		{{ functional_class }} {{ functional }}
+		{{ method_class }} {{ functional }}
 		Dispersion Grimme3 BJDAMP
 	end
 

@@ -411,40 +411,27 @@ fn generate_input(
         context.insert("hessian", &hessian);
     }
 
-    if let Some(method) = method {
-        context.insert("method", &method);
+    for (k, v) in [
+        ("charge", charge),
+        ("mult", mult),
+        ("nprocs", nprocs),
+        ("mem", mem),
+        ("split_index", split_index),
+    ] {
+        if let Some(v) = v {
+            context.insert(k, &v);
+        }
     }
 
-    if let Some(basis_set) = basis_set {
-        context.insert("basis_set", &basis_set);
-    }
-
-    if let Some(dispersion) = dispersion {
-        context.insert("dispersion", &dispersion);
-    }
-
-    if let Some(nprocs) = nprocs {
-        context.insert("nprocs", &nprocs);
-    }
-
-    if let Some(mem) = mem {
-        context.insert("mem", &mem);
-    }
-
-    if let Some(split_index) = split_index {
-        context.insert("split_index", &split_index);
-    }
-
-    if let Some(solvation_model) = solvation_model {
-        context.insert("solvation_model", &solvation_model);
-    }
-
-    if let Some(mult) = mult {
-        context.insert("mult", &mult);
-    }
-
-    if let Some(charge) = charge {
-        context.insert("charge", &charge);
+    for (k, v) in [
+        ("method", method),
+        ("basis_set", basis_set),
+        ("dispersion", dispersion),
+        ("solvation_model", solvation_model),
+    ] {
+        if let Some(v) = v {
+            context.insert(k, &v);
+        }
     }
 
     let extension = match &template.options.extension {

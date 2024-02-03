@@ -8,8 +8,8 @@ extension = "gjf"
 {%endif-%}
 %chk={{ Molecule.filename }}.chk
 %nproc={{ nprocs }}
-%mem={{ memory }}GB
-# {{ functional }}/{{ basis_set }} opt freq=noraman {{ solvent }}
+%mem={{ mem }}GB
+# {{ method }}/{{ basis_set }} opt freq=noraman {{ solvent }}
 
 job title: {{ Molecule.filename }}
 
