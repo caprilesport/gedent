@@ -154,7 +154,10 @@ impl Template {
         ]
         .iter()
         .collect();
-        Ok(template_path)
+        match template_path.try_exists()? {
+            true => Ok(template_path),
+            false => anyhow::bail!(format!("Cant find template {:?}.", template_path)),
+        }
     }
 
     #[cfg(test)]

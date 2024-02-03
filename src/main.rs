@@ -258,8 +258,18 @@ fn main() -> Result<()> {
 
 //Search for paths
 fn get_gedent_home() -> Result<PathBuf, Error> {
-    let mut config_dir = config_dir().ok_or(anyhow!("Cant retrieve gedent home"))?;
+    let mut config_dir =
+        dirs::config_dir().ok_or(anyhow!("Cant retrieve system config directory."))?;
     config_dir.push("gedent");
+    match config_dir.try_exists() {
+        Ok(exists) => {
+            match exists {
+                true => (),
+                false => anyhow::bail!(format!("Failed to retrieve gedent home, {:?} doesn't exist. \nCheck if you've finished the installation procces and create the config directory.", config_dir)), 
+            }
+        },
+        Err(err) => anyhow::bail!(format!("Failed to retrieve gedent home, caused by {:?}", err)), 
+    }
     Ok(config_dir)
 }
 
@@ -280,10 +290,7 @@ fn select_template() -> Result<String, Error> {
     let gedent_home: PathBuf = [get_gedent_home()?, Into::into(TEMPLATES_DIR)]
         .iter()
         .collect();
-    let gedent_home_len = gedent_home
-        .to_str()
-        .ok_or(anyhow!("Cant retrieve gedent home len"))?
-        .len();
+    let gedent_home_len = gedent_home.to_string_lossy().len();
     let templates = Template::get_templates(gedent_home, gedent_home_len, vec![])?;
     let selection = FuzzySelect::with_theme(&ColorfulTheme::default())
         .default(0)
@@ -338,6 +345,8 @@ fn generate_input(
         context.insert(key, &value);
     }
 
+    // todo: pass option, if none send just solvation
+    // if Some() pass solvent as well
     if let Some(solvent) = solvent {
         context.insert("solvation", &true);
         context.insert("solvent", &solvent);

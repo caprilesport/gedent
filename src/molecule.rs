@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Error, Result};
+use anyhow::{Context, Error, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -20,7 +20,9 @@ impl Molecule {
 
     pub fn split(&self, index: usize) -> Result<(Molecule, Molecule), Error> {
         if index >= self.atoms.len() {
-            anyhow::bail!("Index given bigger than size of molecule, exiting...")
+            anyhow::bail!(
+                "Can't split molecule at given index. \nIndex is bigger than size of molecule."
+            )
         }
         let mut molecule1 = self.clone();
         let mut molecule2 = self.clone();
@@ -36,13 +38,10 @@ impl Molecule {
     // returns a vec because we support a file with multiple xyz
     // the check for atom length got kinda ugly.. see if there is some smarter way to do this
     pub fn from_xyz(mut xyz_path: PathBuf) -> Result<Vec<Molecule>, Error> {
-        let xyz_file = std::fs::read_to_string(&xyz_path)?;
+        let xyz_file = std::fs::read_to_string(&xyz_path)
+            .context(format!("Failed to read xyz file {:?}", xyz_path))?;
         xyz_path.set_extension("");
-        let name = String::from(
-            xyz_path
-                .to_str()
-                .ok_or(anyhow!("Cant convert path of xyz file to name"))?,
-        );
+        let name = xyz_path.to_string_lossy().to_string();
         let mut xyz_lines = xyz_file.lines().peekable();
         let mut molecules: Vec<Molecule> = vec![];
         let mut mol = Molecule::new();
@@ -55,7 +54,8 @@ impl Molecule {
                 None => {
                     if mol.atoms.len() != natoms {
                         anyhow::bail!(
-                            "Expected {} atoms found {}, exiting...",
+                            "Error parsing xyz files {:?}. \nExpected {} atoms found {}, exiting...",
+                            xyz_path,
                             natoms,
                             mol.atoms.len()
                         )
@@ -74,7 +74,8 @@ impl Molecule {
                         if !mol.atoms.is_empty() {
                             if mol.atoms.len() != natoms {
                                 anyhow::bail!(
-                                    "Expected {} atoms found {}, exiting...",
+                                    "Error parsing xyz files {:?}. \nExpected {} atoms found {}, exiting...",
+                                    xyz_path,
                                     natoms,
                                     mol.atoms.len()
                                 )
