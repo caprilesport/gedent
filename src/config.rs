@@ -49,7 +49,6 @@ impl Config {
         Ok(())
     }
 
-    // check how to parse params
     pub fn write(&self) -> Result<(), Error> {
         let cfg_path = Config::get_path()?;
         std::fs::write(&cfg_path, toml::to_string(self)?)?;
@@ -105,6 +104,7 @@ impl Config {
             key, value, toml_type
         );
 
+        // TODO: add array and table as well
         match toml_type {
             ArgType::Int => {
                 self.parameters
@@ -128,10 +128,25 @@ impl Config {
 
     pub fn get_path() -> Result<PathBuf, Error> {
         let current_dir = std::env::current_dir()?;
-        let cfg_path: PathBuf = [find_config(current_dir)?, PathBuf::from(CONFIG_NAME)]
+        let cfg_path: PathBuf = [Config::find(current_dir)?, PathBuf::from(CONFIG_NAME)]
             .iter()
             .collect();
         Ok(cfg_path)
+    }
+
+    fn find(dir: PathBuf) -> Result<PathBuf, Error> {
+        let cwd = dir.clone();
+        let gedent_config: PathBuf = [dir.clone(), PathBuf::from(CONFIG_NAME)].iter().collect();
+
+        if std::path::Path::try_exists(&gedent_config)? {
+            Ok(cwd)
+        } else {
+            let parent_folder = dir.parent();
+            match parent_folder {
+                Some(parent) => Config::find(parent.to_path_buf()),
+                None => crate::get_gedent_home(),
+            }
+        }
     }
 
     #[cfg(test)]
@@ -141,22 +156,6 @@ impl Config {
                 default_extension: "".to_string(),
             },
             parameters: Map::new(),
-        }
-    }
-}
-
-// git-like search, stop if gedent.toml is found or if dir.parent = none
-fn find_config(dir: PathBuf) -> Result<PathBuf, Error> {
-    let cwd = dir.clone();
-    let gedent_config: PathBuf = [dir.clone(), PathBuf::from(CONFIG_NAME)].iter().collect();
-
-    if std::path::Path::try_exists(&gedent_config)? {
-        Ok(cwd)
-    } else {
-        let parent_folder = dir.parent();
-        match parent_folder {
-            Some(parent) => find_config(parent.to_path_buf()),
-            None => crate::get_gedent_home(),
         }
     }
 }

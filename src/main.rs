@@ -4,7 +4,6 @@ use crate::template::Template;
 use anyhow::{anyhow, Context, Error, Result};
 use clap::{Parser, Subcommand};
 use dialoguer::{theme::ColorfulTheme, FuzzySelect};
-use dirs::config_dir;
 use std::fs::{copy, read_dir, write};
 use std::path::PathBuf;
 
@@ -23,6 +22,7 @@ struct Input {
 
 impl Input {
     fn write(self) -> Result<(), Error> {
+        println!("Writing {:?}", &self.filename);
         write(&self.filename, &self.content).context(anyhow!("Failed to save input."))
     }
 }
