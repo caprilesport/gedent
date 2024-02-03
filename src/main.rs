@@ -42,22 +42,46 @@ enum Mode {
     Gen {
         /// The template to look for in ~/.config/gedent/templates
         template_name: String,
-        // TODO: Make this a flag
         /// xyz files
         #[arg(value_name = "XYZ files")]
         xyz_files: Option<Vec<PathBuf>>,
         /// Print to screen and don't save file
         #[arg(short, long, default_value_t = false)]
         print: bool,
+        /// Set method
+        #[arg(long, default_value = None)]
+        method: Option<String>,
+        /// Set basis_set
+        #[arg(long, default_value = None)]
+        basis_set: Option<String>,
+        /// Set dispersion
+        #[arg(long, default_value = None)]
+        dispersion: Option<String>,
         /// Set solvent to value and solvation to true
         #[arg(short, long, default_value = None)]
         solvent: Option<Option<String>>,
+        /// Set solvation_model
+        #[arg(long, default_value = None)]
+        solvation_model: Option<String>,
         /// Set charge
         #[arg(short, long, default_value = None)]
         charge: Option<usize>,
-        /// Set multiplicity
+        /// Set hessian
+        #[arg(long, default_value_t = false)]
+        hessian: bool,
         #[arg(short, long, default_value = None)]
-        multiplicity: Option<usize>,
+        /// Set mult
+        #[arg(short, long, default_value = None)]
+        mult: Option<usize>,
+        /// Set nprocs
+        #[arg(long, default_value = None)]
+        nprocs: Option<usize>,
+        /// Set mem
+        #[arg(long, default_value = None)]
+        mem: Option<usize>,
+        /// Set split_index
+        #[arg(long, default_value = None)]
+        split_index: Option<usize>,
     },
     // Subcommand to deal with configurations
     /// Access gedent configuration
@@ -157,9 +181,17 @@ fn main() -> Result<()> {
             template_name,
             xyz_files,
             print,
+            method,
+            basis_set,
+            dispersion,
             solvent,
+            solvation_model,
             charge,
-            multiplicity,
+            hessian,
+            mult,
+            nprocs,
+            mem,
+            split_index,
         } => {
             let mut molecules: Vec<Molecule> = vec![];
             if let Some(files) = xyz_files {
@@ -168,7 +200,21 @@ fn main() -> Result<()> {
                 }
             };
             let template = Template::get(template_name)?;
-            let results = generate_input(template, molecules, solvent, multiplicity, charge)?;
+            let results = generate_input(
+                template,
+                molecules,
+                solvent,
+                mult,
+                charge,
+                method,
+                basis_set,
+                dispersion,
+                solvation_model,
+                hessian,
+                nprocs,
+                mem,
+                split_index,
+            )?;
             for input in results {
                 if print {
                     println!("{}", input.content);
@@ -338,6 +384,14 @@ fn generate_input(
     solvation: Option<Option<String>>,
     mult: Option<usize>,
     charge: Option<usize>,
+    method: Option<String>,
+    basis_set: Option<String>,
+    dispersion: Option<String>,
+    solvation_model: Option<String>,
+    hessian: bool,
+    nprocs: Option<usize>,
+    mem: Option<usize>,
+    split_index: Option<usize>,
 ) -> Result<Vec<Input>, Error> {
     let mut context = tera::Context::new();
     let config = Config::get()?;
@@ -353,8 +407,40 @@ fn generate_input(
         }
     }
 
+    if hessian {
+        context.insert("hessian", &hessian);
+    }
+
+    if let Some(method) = method {
+        context.insert("method", &method);
+    }
+
+    if let Some(basis_set) = basis_set {
+        context.insert("basis_set", &basis_set);
+    }
+
+    if let Some(dispersion) = dispersion {
+        context.insert("dispersion", &dispersion);
+    }
+
+    if let Some(nprocs) = nprocs {
+        context.insert("nprocs", &nprocs);
+    }
+
+    if let Some(mem) = mem {
+        context.insert("mem", &mem);
+    }
+
+    if let Some(split_index) = split_index {
+        context.insert("split_index", &split_index);
+    }
+
+    if let Some(solvation_model) = solvation_model {
+        context.insert("solvation_model", &solvation_model);
+    }
+
     if let Some(mult) = mult {
-        context.insert("multiplicity", &mult);
+        context.insert("mult", &mult);
     }
 
     if let Some(charge) = charge {
