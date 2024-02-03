@@ -51,26 +51,8 @@ impl Molecule {
         let mut counter = 0;
 
         loop {
-            if xyz_lines.peek().is_none() {
-                if mol.atoms.len() != natoms {
-                    anyhow::bail!(
-                        "Expected {} atoms found {}, exiting...",
-                        natoms,
-                        mol.atoms.len()
-                    )
-                }
-                match counter {
-                    0 => (),
-                    _ => {
-                        mol.filename = [name.clone(), counter.clone().to_string()].join("_");
-                    }
-                };
-                molecules.push(mol.clone());
-                break;
-            }
-
-            if xyz_lines.peek().unwrap().parse::<i64>().is_ok() {
-                if !mol.atoms.is_empty() {
+            match xyz_lines.next() {
+                None => {
                     if mol.atoms.len() != natoms {
                         anyhow::bail!(
                             "Expected {} atoms found {}, exiting...",
@@ -78,17 +60,38 @@ impl Molecule {
                             mol.atoms.len()
                         )
                     }
-                    natoms -= natoms; // set to 0 again
-                    mol.filename = [name.clone(), counter.clone().to_string()].join("_");
+                    match counter {
+                        0 => (),
+                        _ => {
+                            mol.filename = [name.clone(), counter.clone().to_string()].join("_");
+                        }
+                    };
                     molecules.push(mol.clone());
-                    counter += 1;
+                    break;
                 }
+                Some(line) => {
+                    if let Ok(n) = line.trim().parse::<usize>() {
+                        if !mol.atoms.is_empty() {
+                            if mol.atoms.len() != natoms {
+                                anyhow::bail!(
+                                    "Expected {} atoms found {}, exiting...",
+                                    natoms,
+                                    mol.atoms.len()
+                                )
+                            }
+                            natoms -= natoms; // set to 0 again
+                            mol.filename = [name.clone(), counter.clone().to_string()].join("_");
+                            molecules.push(mol.clone());
+                            counter += 1;
+                        }
 
-                natoms += xyz_lines.next().unwrap().parse::<usize>()?;
-                mol.description = xyz_lines.next().unwrap_or("").to_string();
-                mol.atoms.clear();
-            } else {
-                mol.atoms.push(xyz_lines.next().unwrap().to_string());
+                        natoms += n;
+                        mol.description = xyz_lines.next().unwrap_or("").to_string();
+                        mol.atoms.clear();
+                    } else {
+                        mol.atoms.push(line.to_string());
+                    }
+                }
             }
         }
 
