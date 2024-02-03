@@ -10,7 +10,7 @@ end
 
 %maxcore {{ memory }} 
 
-{% if solvent -%}
+{% if solvation -%}
 %cpcm
  smd true
  smdsolvent "{{ solvent }}"

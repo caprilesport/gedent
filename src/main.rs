@@ -51,13 +51,13 @@ enum Mode {
         print: bool,
         /// Set solvent to value and solvation to true
         #[arg(short, long, default_value = None)]
-        solvent: Option<String>,
+        solvent: Option<Option<String>>,
         /// Set charge
         #[arg(short, long, default_value = None)]
         charge: Option<usize>,
         /// Set multiplicity
         #[arg(short, long, default_value = None)]
-        mult: Option<usize>,
+        multiplicity: Option<usize>,
     },
     // Subcommand to deal with configurations
     /// Access gedent configuration
@@ -159,7 +159,7 @@ fn main() -> Result<()> {
             print,
             solvent,
             charge,
-            mult,
+            multiplicity,
         } => {
             let mut molecules: Vec<Molecule> = vec![];
             if let Some(files) = xyz_files {
@@ -168,7 +168,7 @@ fn main() -> Result<()> {
                 }
             };
             let template = Template::get(template_name)?;
-            let results = generate_input(template, molecules, solvent, mult, charge)?;
+            let results = generate_input(template, molecules, solvent, multiplicity, charge)?;
             for input in results {
                 if print {
                     println!("{}", input.content);
@@ -335,7 +335,7 @@ fn gedent_init(config: Option<PathBuf>) -> Result<(), Error> {
 fn generate_input(
     template: Template,
     molecules: Vec<Molecule>,
-    solvent: Option<String>,
+    solvation: Option<Option<String>>,
     mult: Option<usize>,
     charge: Option<usize>,
 ) -> Result<Vec<Input>, Error> {
@@ -345,11 +345,12 @@ fn generate_input(
         context.insert(key, &value);
     }
 
-    // todo: pass option, if none send just solvation
-    // if Some() pass solvent as well
-    if let Some(solvent) = solvent {
+    if let Some(solvation) = solvation {
         context.insert("solvation", &true);
-        context.insert("solvent", &solvent);
+        match solvation {
+            Some(solvent) => context.insert("solvent", &solvent),
+            None => (),
+        }
     }
 
     if let Some(mult) = mult {
