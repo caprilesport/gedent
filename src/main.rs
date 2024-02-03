@@ -1,4 +1,3 @@
-#![allow(dead_code, unused_variables, unused_imports)]
 use crate::config::Config;
 use crate::molecule::Molecule;
 use crate::template::Template;
@@ -6,10 +5,8 @@ use anyhow::{anyhow, Context, Error, Result};
 use clap::{Parser, Subcommand};
 use dialoguer::{theme::ColorfulTheme, FuzzySelect};
 use dirs::config_dir;
-use serde::Deserialize;
-use std::fs::{copy, read_dir, read_to_string, write, File};
-use std::path::{Path, PathBuf};
-use tera::Tera;
+use std::fs::{copy, read_dir, write};
+use std::path::PathBuf;
 
 mod config;
 mod molecule;

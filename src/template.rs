@@ -1,5 +1,4 @@
 use crate::get_gedent_home;
-use crate::Config;
 use crate::Molecule;
 use anyhow::{anyhow, Context, Error, Result};
 use serde::Deserialize;
@@ -158,7 +157,7 @@ impl Template {
         Ok(template_path)
     }
 
-    // #[cfg(test)]
+    #[cfg(test)]
     fn new() -> Template {
         Template {
             name: "".to_string(),
@@ -251,7 +250,7 @@ pub fn split_molecule(args: &HashMap<String, Value>) -> Result<Value, tera::Erro
 #[cfg(test)]
 mod tests {
     use super::*;
-    use toml::{map::Map, Value};
+    use toml::Value;
 
     #[test]
     fn render_template_works() {
