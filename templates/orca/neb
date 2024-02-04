@@ -1,4 +1,4 @@
-! {{ functional }} {{ basis_set }} 
+! {{ method }} {{ basis_set }} 
 ! NEB-TS NumFreq IRC
 
 *xyzfile {{ charge }} {{ mult }} {{ xyz_file }}
@@ -7,7 +7,7 @@
  nprocs {{ nprocs }}
 end
 
-%maxcore {{ memory }} 
+%maxcore {{ mem }} 
 
 {% if solvation -%}
 %cpcm

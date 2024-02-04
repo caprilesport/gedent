@@ -34,7 +34,7 @@ Engine adf
 
 	XC
 		Dispersion Grimme3 BJDAMP
-		{{ functional_class }} {{ functional }}
+		{{ method_class }} {{ functional }}
 	end
 
 	Beckegrid

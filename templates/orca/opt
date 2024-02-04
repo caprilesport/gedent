@@ -1,14 +1,14 @@
 --@
 extension = "inp"
 --@
-! {{ functional }} {{ basis_set }} 
+! {{ method }} {{ basis_set }} 
 ! Opt freq D3BJ
 
 %pal
  nprocs {{ nprocs }}
 end
 
-%maxcore {{ memory }} 
+%maxcore {{ mem }} 
 
 {% if solvation -%}
 %cpcm

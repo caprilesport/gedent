@@ -1,4 +1,4 @@
-! {{ functional }} {{ basis_set }} 
+! {{ method }} {{ basis_set }} 
 ! Opt
 
 {% if solvation -%}
