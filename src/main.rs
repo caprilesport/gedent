@@ -1,11 +1,14 @@
 use crate::config::Config;
 use crate::molecule::Molecule;
 use crate::template::Template;
+use include_dir::{include_dir, Dir};
 use anyhow::{anyhow, Context, Error, Result};
-use clap::{Parser, Subcommand};
+use clap::{Command, CommandFactory, Parser, Subcommand};
+use clap_complete::{Shell, generate, Generator};
 use dialoguer::{theme::ColorfulTheme, FuzzySelect};
 use std::fs::{copy, read_dir, write};
 use std::path::PathBuf;
+use std::io;
 
 mod config;
 mod molecule;
@@ -13,6 +16,11 @@ mod template;
 
 const PRESETS_DIR: &str = "presets";
 const TEMPLATES_DIR: &str = "templates";
+
+static INCLUDE_PRESETS_DIR: Dir = include_dir!("presets");
+static INCLUDE_TEMPLATES_DIR: Dir = include_dir!("templates");
+static GEDENT_CONFIG: &str = include_str!("../gedent.toml");
+
 
 #[derive(Debug)]
 struct Input {
@@ -30,15 +38,26 @@ impl Input {
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 #[command(propagate_version = true)]
+#[command(arg_required_else_help = true)]
 struct Cli {
     #[command(subcommand)]
-    mode: Mode,
+    mode: Option<Mode>,
+    /// Check if gedent is set up correctly.
+    #[arg(long, default_value = None)]
+    health: bool,
+    /// Set up gedent configuration directory.
+    // Bare, presets and full can be passed to create a bare directory with just the config, Presets create the config and the 
+    /// presets, full creates the directory with templates 
+    #[arg(long, default_value = None)]
+    set_up: bool,
+    // If provided, outputs the completion file for given shell
+    #[arg(long = "generate", value_enum)]
+    generator: Option<Shell>,
 }
 
 #[derive(Debug, Subcommand)]
 enum Mode {
     /// Generate a new input based on a template
-    #[command(alias = "g")]
     Gen {
         /// The template to look for in ~/.config/gedent/templates
         template_name: String,
@@ -85,14 +104,12 @@ enum Mode {
     },
     // Subcommand to deal with configurations
     /// Access gedent configuration
-    #[command(alias = "c")]
     Config {
         #[command(subcommand)]
         config_subcommand: ConfigSubcommand,
     },
     // Subcommand to deal with templates:
     /// Access template functionality
-    #[command(alias = "t")]
     Template {
         #[command(subcommand)]
         template_subcommand: TemplateSubcommand,
@@ -108,7 +125,6 @@ enum Mode {
 #[derive(Debug, Subcommand)]
 enum TemplateSubcommand {
     /// Prints the unformatted template to stdout
-    #[command(alias = "p")]
     Print {
         // name of template to search for
         template: Option<String>,
@@ -123,7 +139,6 @@ enum TemplateSubcommand {
         software: Option<String>,
     },
     /// List available templates
-    #[command(alias = "l")]
     List {
         // Lists all available templates
         // TODO: decide how to deal with organization in the folder
@@ -140,7 +155,6 @@ enum TemplateSubcommand {
 #[derive(Debug, Subcommand)]
 enum ConfigSubcommand {
     /// Prints the location and the currently used configuration
-    #[command(alias = "p")]
     Print {
         /// Print the path of the printed config.
         #[arg(short, long, default_value_t = false)]
@@ -169,137 +183,158 @@ enum ConfigSubcommand {
         key: Option<String>,
     },
     /// Opens the currently used config file in your default editor.
-    #[command(alias = "e")]
     Edit {},
 }
+
+    
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    match cli.mode {
-        Mode::Gen {
-            template_name,
-            xyz_files,
-            print,
-            method,
-            basis_set,
-            dispersion,
-            solvent,
-            solvation_model,
-            charge,
-            hessian,
-            mult,
-            nprocs,
-            mem,
-            split_index,
-        } => {
-            let mut molecules: Vec<Molecule> = vec![];
-            if let Some(files) = xyz_files {
-                for file in files {
-                    molecules = [molecules, Molecule::from_xyz(file)?].concat();
-                }
-            };
-            let template = Template::get(template_name)?;
-            let results = generate_input(
-                template,
-                molecules,
-                solvent,
-                mult,
-                charge,
+    if let Some(generator) = cli.generator {
+        let mut cmd = Cli::command();
+        eprintln!("Generating completion file for {generator:?}...");
+        print_completions(generator, &mut cmd);
+    } 
+
+    if cli.health {
+        check_gedent_health()?;
+    }
+
+    if cli.set_up {
+        setup_gedent()?;
+    }
+
+    if let Some(mode) = cli.mode {
+        match mode {
+            Mode::Gen {
+                template_name,
+                xyz_files,
+                print,
                 method,
                 basis_set,
                 dispersion,
+                solvent,
                 solvation_model,
+                charge,
                 hessian,
+                mult,
                 nprocs,
                 mem,
                 split_index,
-            )?;
-            for input in results {
-                if print {
-                    println!("{}", input.content);
-                } else {
-                    input.write()?;
+            } => {
+                let mut molecules: Vec<Molecule> = vec![];
+                if let Some(files) = xyz_files {
+                    for file in files {
+                        molecules = [molecules, Molecule::from_xyz(file)?].concat();
+                    }
+                };
+                let template = Template::get(template_name)?;
+                let results = generate_input(
+                    template,
+                    molecules,
+                    solvent,
+                    mult,
+                    charge,
+                    method,
+                    basis_set,
+                    dispersion,
+                    solvation_model,
+                    hessian,
+                    nprocs,
+                    mem,
+                    split_index,
+                )?;
+                for input in results {
+                    if print {
+                        println!("{}", input.content);
+                    } else {
+                        input.write()?;
+                    }
                 }
             }
+
+            Mode::Config { config_subcommand } => match config_subcommand {
+                ConfigSubcommand::Print { location } => {
+                    let config = Config::get()?;
+                    config.print(location)?
+                }
+                ConfigSubcommand::Set { key, value } => {
+                    let mut config = Config::get()?;
+                    let key = match key {
+                        Some(key) => key,
+                        None => select_key(&config)?,
+                    };
+                    let value = match value {
+                        Some(val) => val,
+                        None => dialoguer::Input::with_theme(&ColorfulTheme::default())
+                            .with_prompt(format!("Set {} to:", key))
+                            .interact_text()
+                            .unwrap(),
+                    };
+                    config.set(key, value)?;
+                    config.write()?;
+                }
+                ConfigSubcommand::Add {
+                    key,
+                    value,
+                    toml_type,
+                } => {
+                    let mut config = Config::get()?;
+                    config.add(key, value, toml_type)?;
+                    config.write()?;
+                }
+                ConfigSubcommand::Del { key } => {
+                    let mut config = Config::get()?;
+                    let key = match key {
+                        Some(key) => key,
+                        None => select_key(&config)?,
+                    };
+                    config.delete(key)?;
+                    config.write()?;
+                }
+                ConfigSubcommand::Edit {} => Config::edit()?,
+            },
+
+            Mode::Template {
+                template_subcommand,
+            } => match template_subcommand {
+                TemplateSubcommand::Print { template } => {
+                    let template = match template {
+                        Some(templ) => templ,
+                        None => select_template()?,
+                    };
+                    Template::print_template(template)?
+                }
+                TemplateSubcommand::New {
+                    software,
+                    template_name,
+                } => {
+                    let software = match software {
+                        Some(software) => software,
+                        None => select_software()?,
+                    };
+                    Template::from_preset(software, template_name)?
+                }
+                TemplateSubcommand::List {} => Template::list_templates()?,
+                TemplateSubcommand::Edit { template } => {
+                    let template = match template {
+                        Some(template) => template,
+                        None => select_template()?,
+                    };
+                    Template::edit_template(template)?
+                }
+            },
+
+            Mode::Init { config } => gedent_init(config)?,
         }
-
-        Mode::Config { config_subcommand } => match config_subcommand {
-            ConfigSubcommand::Print { location } => {
-                let config = Config::get()?;
-                config.print(location)?
-            }
-            ConfigSubcommand::Set { key, value } => {
-                let mut config = Config::get()?;
-                let key = match key {
-                    Some(key) => key,
-                    None => select_key(&config)?,
-                };
-                let value = match value {
-                    Some(val) => val,
-                    None => dialoguer::Input::with_theme(&ColorfulTheme::default())
-                        .with_prompt(format!("Set {} to:", key))
-                        .interact_text()
-                        .unwrap(),
-                };
-                config.set(key, value)?;
-                config.write()?;
-            }
-            ConfigSubcommand::Add {
-                key,
-                value,
-                toml_type,
-            } => {
-                let mut config = Config::get()?;
-                config.add(key, value, toml_type)?;
-                config.write()?;
-            }
-            ConfigSubcommand::Del { key } => {
-                let mut config = Config::get()?;
-                let key = match key {
-                    Some(key) => key,
-                    None => select_key(&config)?,
-                };
-                config.delete(key)?;
-                config.write()?;
-            }
-            ConfigSubcommand::Edit {} => Config::edit()?,
-        },
-
-        Mode::Template {
-            template_subcommand,
-        } => match template_subcommand {
-            TemplateSubcommand::Print { template } => {
-                let template = match template {
-                    Some(templ) => templ,
-                    None => select_template()?,
-                };
-                Template::print_template(template)?
-            }
-            TemplateSubcommand::New {
-                software,
-                template_name,
-            } => {
-                let software = match software {
-                    Some(software) => software,
-                    None => select_software()?,
-                };
-                Template::from_preset(software, template_name)?
-            }
-            TemplateSubcommand::List {} => Template::list_templates()?,
-            TemplateSubcommand::Edit { template } => {
-                let template = match template {
-                    Some(template) => template,
-                    None => select_template()?,
-                };
-                Template::edit_template(template)?
-            }
-        },
-
-        Mode::Init { config } => gedent_init(config)?,
     };
 
     Ok(())
+}
+
+fn print_completions<G: Generator>(gen: G, cmd: &mut Command) {
+    generate(gen, cmd, cmd.get_name().to_string(), &mut io::stdout());
 }
 
 //Search for paths
@@ -311,7 +346,7 @@ fn get_gedent_home() -> Result<PathBuf, Error> {
         Ok(exists) => {
             match exists {
                 true => (),
-                false => anyhow::bail!(format!("Failed to retrieve gedent home, {:?} doesn't exist. \nCheck if you've finished the installation procces and create the config directory.", config_dir)), 
+                false => anyhow::bail!(format!("Failed to retrieve gedent home, {:?} doesn't exist. \nCheck if you've finished the installation procces and created the config directory.", config_dir)), 
             }
         },
         Err(err) => anyhow::bail!(format!("Failed to retrieve gedent home, caused by {:?}", err)), 
@@ -361,6 +396,70 @@ fn select_software() -> Result<String, Error> {
         .interact()
         .unwrap();
     Ok(softwares[selection].to_string())
+}
+
+fn check_gedent_health() -> Result<(), Error> {
+    match get_gedent_home() {
+        Ok(dir) => {
+            println!("Found config dir for gedent in {:?}.", dir)
+        }
+        Err(err) => {
+            anyhow::bail!("{:?}", err);
+        }
+    }
+
+    let softwares: Vec<String> = read_dir(
+        [get_gedent_home()?, Into::into(PRESETS_DIR)]
+            .iter()
+            .collect::<PathBuf>(),
+    )?
+    .filter_map(|e| e.ok())
+    .map(|e| e.path().file_name().unwrap().to_string_lossy().into_owned())
+    .collect();
+    println!("Found {} presets.", softwares.len());
+
+    let templates_home: PathBuf = [get_gedent_home()?, Into::into(TEMPLATES_DIR)]
+        .iter()
+        .collect();
+    let templates_home_len = templates_home.to_string_lossy().len();
+    let templates = Template::get_templates(templates_home, templates_home_len, vec![])?;
+    println!("Found {} templates.", templates.len());
+    
+    
+    Ok(())
+}
+
+fn setup_gedent() -> Result<(), Error> {
+    let mut config_dir = dirs::config_dir().ok_or(anyhow!("Cant retrieve system config directory."))?;
+    config_dir.push("gedent");
+
+    match config_dir.try_exists() {
+        Ok(exists) => {
+            match exists {
+                true => anyhow::bail!(format!("Gedent home already exists, if you want to set it up again delete the config dir {:?}.", config_dir)),
+                false => {
+                    println!("Creating config dir in {:?}.", config_dir);
+                    std::fs::create_dir(&config_dir).context("Failed to create config dir.")?;
+                    println!("Creating gedent.toml.");
+                    let config_path: PathBuf = [config_dir.clone(), Into::into("gedent.toml")].iter().collect();
+                    std::fs::write(&config_path, GEDENT_CONFIG).context("Failed to create gedent config.")?;
+
+                    println!("Generating presets.");
+                    let presets: PathBuf = [config_dir.clone(), Into::into(PRESETS_DIR)].iter().collect();
+                    std::fs::create_dir(&presets).context("Failed to create presets dir.")?;
+                    INCLUDE_PRESETS_DIR.extract(presets).context("Failed to extract presets.")?;
+
+                    println!("Generating default templates.");
+                    let templates: PathBuf = [config_dir.clone(), Into::into(TEMPLATES_DIR)].iter().collect();
+                    std::fs::create_dir(&templates).context("Failed to create templates dir.")?;
+                    INCLUDE_TEMPLATES_DIR.extract(templates).context("Failed to extract templates.")?;
+                }, 
+            }
+        },
+        Err(err) => anyhow::bail!(format!("Failed to check if gedent home exists, caused by {:?}", err)), 
+    }
+
+    Ok(())
 }
 
 // copy the specified or currently used config to cwd

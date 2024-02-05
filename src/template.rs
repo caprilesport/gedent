@@ -1,6 +1,6 @@
 use crate::get_gedent_home;
 use crate::Molecule;
-use anyhow::{anyhow, Context, Error, Result};
+use anyhow::{Context, Error, Result};
 use serde::Deserialize;
 use serde_json::value::{from_value, to_value, Value};
 use std::collections::HashMap;
@@ -106,15 +106,12 @@ impl Template {
     }
 
     pub fn list_templates() -> Result<(), Error> {
-        let gedent_home: PathBuf = [get_gedent_home()?, Into::into(TEMPLATES_DIR)]
+        let templates_home: PathBuf = [get_gedent_home()?, Into::into(TEMPLATES_DIR)]
             .iter()
             .collect();
         // +1 is here to remove the first slash
-        let gedent_home_len = gedent_home
-            .to_str()
-            .ok_or(anyhow!("Cant retrieve gedent home len"))?
-            .len();
-        let templates = Template::get_templates(gedent_home, gedent_home_len, vec![])?;
+        let templates_home_len = templates_home.to_string_lossy().len();
+        let templates = Template::get_templates(templates_home, templates_home_len, vec![])?;
         for i in templates {
             println!("{}", i);
         }
