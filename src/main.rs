@@ -21,6 +21,21 @@ static INCLUDE_PRESETS_DIR: Dir = include_dir!("presets");
 static INCLUDE_TEMPLATES_DIR: Dir = include_dir!("templates");
 static GEDENT_CONFIG: &str = include_str!("../gedent.toml");
 
+#[derive(Debug, Default)]
+struct GenOptions {
+    method: Option<String>,
+    basis_set: Option<String>,
+    dispersion: Option<String>,
+    solvent: Option<Option<String>>,
+    solvation_model: Option<String>,
+    charge: Option<usize>,
+    hessian: bool,
+    mult: Option<usize>,
+    nprocs: Option<usize>,
+    mem: Option<usize>,
+    split_index: Option<usize>,
+}
+
 #[derive(Debug)]
 struct Input {
     filename: PathBuf,
@@ -226,21 +241,20 @@ fn main() -> Result<()> {
                     }
                 };
                 let template = Template::get(template_name)?;
-                let results = generate_input(
-                    template,
-                    molecules,
-                    solvent,
-                    mult,
-                    charge,
+                let opts = GenOptions {
                     method,
                     basis_set,
                     dispersion,
+                    solvent,
                     solvation_model,
+                    charge,
                     hessian,
+                    mult,
                     nprocs,
                     mem,
                     split_index,
-                )?;
+                };
+                let results = generate_input(template, molecules, opts)?;
                 for input in results {
                     if print {
                         println!("{}", input.content);
@@ -471,21 +485,10 @@ fn gedent_init(config: Option<PathBuf>) -> Result<(), Error> {
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
 fn generate_input(
     template: Template,
     molecules: Vec<Molecule>,
-    solvation: Option<Option<String>>,
-    mult: Option<usize>,
-    charge: Option<usize>,
-    method: Option<String>,
-    basis_set: Option<String>,
-    dispersion: Option<String>,
-    solvation_model: Option<String>,
-    hessian: bool,
-    nprocs: Option<usize>,
-    mem: Option<usize>,
-    split_index: Option<usize>,
+    opts: GenOptions,
 ) -> Result<Vec<Input>, Error> {
     let mut context = tera::Context::new();
     let config = Config::get()?;
@@ -493,23 +496,23 @@ fn generate_input(
         context.insert(key, &value);
     }
 
-    if let Some(solvation) = solvation {
+    if let Some(solvation) = opts.solvent {
         context.insert("solvation", &true);
         if let Some(solvent) = solvation {
             context.insert("solvent", &solvent);
         }
     }
 
-    if hessian {
-        context.insert("hessian", &hessian);
+    if opts.hessian {
+        context.insert("hessian", &opts.hessian);
     }
 
     for (k, v) in [
-        ("charge", charge),
-        ("mult", mult),
-        ("nprocs", nprocs),
-        ("mem", mem),
-        ("split_index", split_index),
+        ("charge", opts.charge),
+        ("mult", opts.mult),
+        ("nprocs", opts.nprocs),
+        ("mem", opts.mem),
+        ("split_index", opts.split_index),
     ] {
         if let Some(v) = v {
             context.insert(k, &v);
@@ -517,10 +520,10 @@ fn generate_input(
     }
 
     for (k, v) in [
-        ("method", method),
-        ("basis_set", basis_set),
-        ("dispersion", dispersion),
-        ("solvation_model", solvation_model),
+        ("method", opts.method),
+        ("basis_set", opts.basis_set),
+        ("dispersion", opts.dispersion),
+        ("solvation_model", opts.solvation_model),
     ] {
         if let Some(v) = v {
             context.insert(k, &v);
