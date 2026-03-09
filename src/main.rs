@@ -1,14 +1,14 @@
 use crate::config::Config;
 use crate::molecule::Molecule;
 use crate::template::Template;
-use include_dir::{include_dir, Dir};
 use anyhow::{anyhow, Context, Error, Result};
 use clap::{Command, CommandFactory, Parser, Subcommand};
-use clap_complete::{Shell, generate, Generator};
+use clap_complete::{generate, Generator, Shell};
 use dialoguer::{theme::ColorfulTheme, FuzzySelect};
+use include_dir::{include_dir, Dir};
 use std::fs::{copy, read_dir, write};
-use std::path::PathBuf;
 use std::io;
+use std::path::PathBuf;
 
 mod config;
 mod molecule;
@@ -20,7 +20,6 @@ const TEMPLATES_DIR: &str = "templates";
 static INCLUDE_PRESETS_DIR: Dir = include_dir!("presets");
 static INCLUDE_TEMPLATES_DIR: Dir = include_dir!("templates");
 static GEDENT_CONFIG: &str = include_str!("../gedent.toml");
-
 
 #[derive(Debug)]
 struct Input {
@@ -46,8 +45,8 @@ struct Cli {
     #[arg(long, default_value = None)]
     health: bool,
     /// Set up gedent configuration directory.
-    // Bare, presets and full can be passed to create a bare directory with just the config, Presets create the config and the 
-    /// presets, full creates the directory with templates 
+    // Bare, presets and full can be passed to create a bare directory with just the config, Presets create the config and the
+    /// presets, full creates the directory with templates
     #[arg(long, default_value = None)]
     set_up: bool,
     // If provided, outputs the completion file for given shell
@@ -88,7 +87,6 @@ enum Mode {
         /// Set hessian
         #[arg(long, default_value_t = false)]
         hessian: bool,
-        #[arg(short, long, default_value = None)]
         /// Set mult
         #[arg(short, long, default_value = None)]
         mult: Option<usize>,
@@ -186,8 +184,6 @@ enum ConfigSubcommand {
     Edit {},
 }
 
-    
-
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -195,7 +191,7 @@ fn main() -> Result<()> {
         let mut cmd = Cli::command();
         eprintln!("Generating completion file for {generator:?}...");
         print_completions(generator, &mut cmd);
-    } 
+    }
 
     if cli.health {
         check_gedent_health()?;
@@ -424,13 +420,13 @@ fn check_gedent_health() -> Result<(), Error> {
     let templates_home_len = templates_home.to_string_lossy().len();
     let templates = Template::get_templates(templates_home, templates_home_len, vec![])?;
     println!("Found {} templates.", templates.len());
-    
-    
+
     Ok(())
 }
 
 fn setup_gedent() -> Result<(), Error> {
-    let mut config_dir = dirs::config_dir().ok_or(anyhow!("Cant retrieve system config directory."))?;
+    let mut config_dir =
+        dirs::config_dir().ok_or(anyhow!("Cant retrieve system config directory."))?;
     config_dir.push("gedent");
 
     match config_dir.try_exists() {
@@ -453,10 +449,10 @@ fn setup_gedent() -> Result<(), Error> {
                     let templates: PathBuf = [config_dir.clone(), Into::into(TEMPLATES_DIR)].iter().collect();
                     std::fs::create_dir(&templates).context("Failed to create templates dir.")?;
                     INCLUDE_TEMPLATES_DIR.extract(templates).context("Failed to extract templates.")?;
-                }, 
+                },
             }
         },
-        Err(err) => anyhow::bail!(format!("Failed to check if gedent home exists, caused by {:?}", err)), 
+        Err(err) => anyhow::bail!(format!("Failed to check if gedent home exists, caused by {:?}", err)),
     }
 
     Ok(())
@@ -477,6 +473,7 @@ fn gedent_init(config: Option<PathBuf>) -> Result<(), Error> {
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn generate_input(
     template: Template,
     molecules: Vec<Molecule>,
@@ -500,9 +497,8 @@ fn generate_input(
 
     if let Some(solvation) = solvation {
         context.insert("solvation", &true);
-        match solvation {
-            Some(solvent) => context.insert("solvent", &solvent),
-            None => (),
+        if let Some(solvent) = solvation {
+            context.insert("solvent", &solvent);
         }
     }
 

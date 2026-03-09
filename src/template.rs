@@ -126,11 +126,16 @@ impl Template {
         while let Some(next) = lines.next() {
             if next.contains("--@") {
                 loop {
-                    if lines.peek().unwrap().contains("--@") {
-                        let _ = lines.next();
-                        break;
+                    match lines.peek() {
+                        None => anyhow::bail!("Unclosed template header: missing closing '--@'"),
+                        Some(line) if line.contains("--@") => {
+                            let _ = lines.next();
+                            break;
+                        }
+                        Some(_) => {
+                            header = [header, lines.next().unwrap().to_string()].join("\n");
+                        }
                     }
-                    header = [header, lines.next().unwrap().to_string()].join("\n");
                 }
             } else {
                 template = [template, next.to_string()].join("\n");
@@ -204,14 +209,14 @@ pub fn split_molecule(args: &HashMap<String, Value>) -> Result<Value, tera::Erro
             Ok(v) => v,
             Err(_) => {
                 return Err(tera::Error::msg(format!(
-                    "Function `print_molecule` received molecule={} but `molecule` can only be of type Molecule",
+                    "Function `split_molecule` received molecule={} but `molecule` can only be of type Molecule",
                     val
                 )));
             }
         },
         None => {
             return Err(tera::Error::msg(
-                "Function `print_molecule` didn't receive a `molecule` argument",
+                "Function `split_molecule` didn't receive a `molecule` argument",
             ))
         }
     };
@@ -221,14 +226,14 @@ pub fn split_molecule(args: &HashMap<String, Value>) -> Result<Value, tera::Erro
             Ok(v) => v,
             Err(_) => {
                 return Err(tera::Error::msg(format!(
-                    "Function `slit_molecule` received index={} but `index` can only be of type integer.",
+                    "Function `split_molecule` received index={} but `index` can only be of type integer.",
                     val
                 )));
             }
         },
         None => {
             return Err(tera::Error::msg(
-                "Function `slit_molecule` didn't receive a `index` argument",
+                "Function `split_molecule` didn't receive a `index` argument",
             ))
         }
     };

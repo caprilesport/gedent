@@ -1,0 +1,15 @@
+#!/bin/sh
+set -e
+
+echo "Running pre-commit checks..."
+
+echo "  fmt..."
+cargo fmt --check
+
+echo "  clippy..."
+cargo clippy -- -D warnings
+
+echo "  test..."
+cargo test --quiet
+
+echo "All checks passed."
