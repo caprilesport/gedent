@@ -367,8 +367,7 @@ fn select_template() -> Result<String, Error> {
     let gedent_home: PathBuf = [get_gedent_home()?, Into::into(TEMPLATES_DIR)]
         .iter()
         .collect();
-    let gedent_home_len = gedent_home.to_string_lossy().len();
-    let templates = Template::get_templates(gedent_home, gedent_home_len, vec![])?;
+    let templates = Template::get_templates(gedent_home)?;
     let selection = FuzzySelect::with_theme(&ColorfulTheme::default())
         .default(0)
         .items(&templates[..])
@@ -417,8 +416,7 @@ fn check_gedent_health() -> Result<(), Error> {
     let templates_home: PathBuf = [get_gedent_home()?, Into::into(TEMPLATES_DIR)]
         .iter()
         .collect();
-    let templates_home_len = templates_home.to_string_lossy().len();
-    let templates = Template::get_templates(templates_home, templates_home_len, vec![])?;
+    let templates = Template::get_templates(templates_home)?;
     println!("Found {} templates.", templates.len());
 
     Ok(())

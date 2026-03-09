@@ -4,9 +4,10 @@ use anyhow::{Context, Error, Result};
 use serde::Deserialize;
 use serde_json::value::{from_value, to_value, Value};
 use std::collections::HashMap;
-use std::fs::{copy, read_dir, read_to_string};
+use std::fs::{copy, read_to_string};
 use std::path::PathBuf;
 use tera::Tera;
+use walkdir::WalkDir;
 
 const PRESETS_DIR: &str = "presets";
 const TEMPLATES_DIR: &str = "templates";
@@ -57,26 +58,15 @@ impl Template {
         Ok(tera.render(&self.name, context)?)
     }
 
-    pub fn get_templates(
-        entry: PathBuf,
-        gedent_home_len: usize,
-        mut templates: Vec<String>,
-    ) -> Result<Vec<String>, Error> {
-        if entry.is_dir() {
-            let new_dir = read_dir(entry)?;
-            for new_entry in new_dir {
-                let new_templates = Template::get_templates(
-                    new_entry.as_ref().unwrap().path(),
-                    gedent_home_len,
-                    vec![],
-                )?;
-                templates = [templates, new_templates].concat();
-            }
-            Ok(templates)
-        } else {
-            templates.push(entry.to_str().unwrap()[gedent_home_len + 1..].to_string());
-            Ok(templates)
-        }
+    pub fn get_templates(templates_home: PathBuf) -> Result<Vec<String>, Error> {
+        let home_len = templates_home.to_string_lossy().len();
+        let templates = WalkDir::new(&templates_home)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file())
+            .map(|e| e.path().to_string_lossy()[home_len + 1..].to_string())
+            .collect();
+        Ok(templates)
     }
 
     pub fn get(template_name: String) -> Result<Template, Error> {
@@ -109,9 +99,7 @@ impl Template {
         let templates_home: PathBuf = [get_gedent_home()?, Into::into(TEMPLATES_DIR)]
             .iter()
             .collect();
-        // +1 is here to remove the first slash
-        let templates_home_len = templates_home.to_string_lossy().len();
-        let templates = Template::get_templates(templates_home, templates_home_len, vec![])?;
+        let templates = Template::get_templates(templates_home)?;
         for i in templates {
             println!("{}", i);
         }
