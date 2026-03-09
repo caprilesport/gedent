@@ -1,3 +1,5 @@
+#![allow(clippy::multiple_crate_versions)]
+
 use crate::config::{get_gedent_home, select_key, Config};
 use crate::molecule::Molecule;
 use crate::template::{select_software, select_template, Template};
@@ -26,6 +28,7 @@ struct GenOptions {
     method: Option<String>,
     basis_set: Option<String>,
     dispersion: Option<String>,
+    #[allow(clippy::option_option)]
     solvent: Option<Option<String>>,
     solvation_model: Option<String>,
     charge: Option<usize>,
@@ -44,7 +47,7 @@ struct Input {
 
 impl Input {
     fn write(self) -> Result<(), Error> {
-        println!("Writing {:?}", &self.filename);
+        println!("Writing {}", self.filename.display());
         write(&self.filename, &self.content).context(anyhow!("Failed to save input."))
     }
 }
@@ -84,7 +87,7 @@ enum Mode {
         /// Set method
         #[arg(long, default_value = None)]
         method: Option<String>,
-        /// Set basis_set
+        /// Set `basis_set`
         #[arg(long, default_value = None)]
         basis_set: Option<String>,
         /// Set dispersion
@@ -92,8 +95,9 @@ enum Mode {
         dispersion: Option<String>,
         /// Set solvent to value and solvation to true
         #[arg(short, long, default_value = None)]
+        #[allow(clippy::option_option)]
         solvent: Option<Option<String>>,
-        /// Set solvation_model
+        /// Set `solvation_model`
         #[arg(long, default_value = None)]
         solvation_model: Option<String>,
         /// Set charge
@@ -111,7 +115,7 @@ enum Mode {
         /// Set mem
         #[arg(long, default_value = None)]
         mem: Option<usize>,
-        /// Set split_index
+        /// Set `split_index`
         #[arg(long, default_value = None)]
         split_index: Option<usize>,
     },
@@ -199,6 +203,7 @@ enum ConfigSubcommand {
     Edit {},
 }
 
+#[allow(clippy::too_many_lines)]
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -239,7 +244,7 @@ fn main() -> Result<()> {
                     for file in files {
                         molecules = [molecules, Molecule::from_xyz(file)?].concat();
                     }
-                };
+                }
                 let template = Template::get(template_name)?;
                 let opts = GenOptions {
                     method,
@@ -254,7 +259,7 @@ fn main() -> Result<()> {
                     mem,
                     split_index,
                 };
-                let results = generate_input(template, molecules, opts)?;
+                let results = generate_input(&template, molecules, opts)?;
                 for input in results {
                     if print {
                         println!("{}", input.content);
@@ -267,7 +272,7 @@ fn main() -> Result<()> {
             Mode::Config { config_subcommand } => match config_subcommand {
                 ConfigSubcommand::Print { location } => {
                     let config = Config::get()?;
-                    config.print(location)?
+                    config.print(location)?;
                 }
                 ConfigSubcommand::Set { key, value } => {
                     let mut config = Config::get()?;
@@ -275,14 +280,13 @@ fn main() -> Result<()> {
                         Some(key) => key,
                         None => select_key(&config)?,
                     };
-                    let value = match value {
-                        Some(val) => val,
-                        None => dialoguer::Input::with_theme(&ColorfulTheme::default())
-                            .with_prompt(format!("Set {} to:", key))
+                    let value = value.unwrap_or_else(|| {
+                        dialoguer::Input::with_theme(&ColorfulTheme::default())
+                            .with_prompt(format!("Set {key} to:"))
                             .interact_text()
-                            .unwrap(),
-                    };
-                    config.set(key, value)?;
+                            .unwrap()
+                    });
+                    config.set(&key, value)?;
                     config.write()?;
                 }
                 ConfigSubcommand::Add {
@@ -300,7 +304,7 @@ fn main() -> Result<()> {
                         Some(key) => key,
                         None => select_key(&config)?,
                     };
-                    config.delete(key)?;
+                    config.delete(&key)?;
                     config.write()?;
                 }
                 ConfigSubcommand::Edit {} => Config::edit()?,
@@ -314,7 +318,7 @@ fn main() -> Result<()> {
                         Some(templ) => templ,
                         None => select_template()?,
                     };
-                    Template::print_template(template)?
+                    Template::print_template(&template)?;
                 }
                 TemplateSubcommand::New {
                     software,
@@ -324,7 +328,7 @@ fn main() -> Result<()> {
                         Some(software) => software,
                         None => select_software()?,
                     };
-                    Template::from_preset(software, template_name)?
+                    Template::from_preset(software, template_name)?;
                 }
                 TemplateSubcommand::List {} => Template::list_templates()?,
                 TemplateSubcommand::Edit { template } => {
@@ -332,13 +336,13 @@ fn main() -> Result<()> {
                         Some(template) => template,
                         None => select_template()?,
                     };
-                    Template::edit_template(template)?
+                    Template::edit_template(&template)?;
                 }
             },
 
             Mode::Init { config } => gedent_init(config)?,
         }
-    };
+    }
 
     Ok(())
 }
@@ -350,7 +354,7 @@ fn print_completions<G: Generator>(gen: G, cmd: &mut Command) {
 fn check_gedent_health() -> Result<(), Error> {
     match get_gedent_home() {
         Ok(dir) => {
-            println!("Found config dir for gedent in {:?}.", dir)
+            println!("Found config dir for gedent in {}.", dir.display());
         }
         Err(err) => {
             anyhow::bail!("{:?}", err);
@@ -362,7 +366,7 @@ fn check_gedent_health() -> Result<(), Error> {
             .iter()
             .collect::<PathBuf>(),
     )?
-    .filter_map(|e| e.ok())
+    .filter_map(std::result::Result::ok)
     .map(|e| e.path().file_name().unwrap().to_string_lossy().into_owned())
     .collect();
     println!("Found {} presets.", softwares.len());
@@ -370,7 +374,7 @@ fn check_gedent_health() -> Result<(), Error> {
     let templates_home: PathBuf = [get_gedent_home()?, Into::into(TEMPLATES_DIR)]
         .iter()
         .collect();
-    let templates = Template::get_templates(templates_home)?;
+    let templates = Template::get_templates(&templates_home);
     println!("Found {} templates.", templates.len());
 
     Ok(())
@@ -378,33 +382,43 @@ fn check_gedent_health() -> Result<(), Error> {
 
 fn setup_gedent() -> Result<(), Error> {
     let mut config_dir =
-        dirs::config_dir().ok_or(anyhow!("Cant retrieve system config directory."))?;
+        dirs::config_dir().ok_or_else(|| anyhow!("Cant retrieve system config directory."))?;
     config_dir.push("gedent");
 
     match config_dir.try_exists() {
-        Ok(exists) => {
-            match exists {
-                true => anyhow::bail!(format!("Gedent home already exists, if you want to set it up again delete the config dir {:?}.", config_dir)),
-                false => {
-                    println!("Creating config dir in {:?}.", config_dir);
-                    std::fs::create_dir(&config_dir).context("Failed to create config dir.")?;
-                    println!("Creating gedent.toml.");
-                    let config_path: PathBuf = [config_dir.clone(), Into::into("gedent.toml")].iter().collect();
-                    std::fs::write(&config_path, GEDENT_CONFIG).context("Failed to create gedent config.")?;
+        Ok(true) => anyhow::bail!(
+            "Gedent home already exists, if you want to set it up again delete the config dir {}.",
+            config_dir.display()
+        ),
+        Ok(false) => {
+            println!("Creating config dir in {}.", config_dir.display());
+            std::fs::create_dir(&config_dir).context("Failed to create config dir.")?;
+            println!("Creating gedent.toml.");
+            let config_path: PathBuf = [config_dir.clone(), Into::into("gedent.toml")]
+                .iter()
+                .collect();
+            std::fs::write(&config_path, GEDENT_CONFIG)
+                .context("Failed to create gedent config.")?;
 
-                    println!("Generating presets.");
-                    let presets: PathBuf = [config_dir.clone(), Into::into(PRESETS_DIR)].iter().collect();
-                    std::fs::create_dir(&presets).context("Failed to create presets dir.")?;
-                    INCLUDE_PRESETS_DIR.extract(presets).context("Failed to extract presets.")?;
+            println!("Generating presets.");
+            let presets: PathBuf = [config_dir.clone(), Into::into(PRESETS_DIR)]
+                .iter()
+                .collect();
+            std::fs::create_dir(&presets).context("Failed to create presets dir.")?;
+            INCLUDE_PRESETS_DIR
+                .extract(presets)
+                .context("Failed to extract presets.")?;
 
-                    println!("Generating default templates.");
-                    let templates: PathBuf = [config_dir.clone(), Into::into(TEMPLATES_DIR)].iter().collect();
-                    std::fs::create_dir(&templates).context("Failed to create templates dir.")?;
-                    INCLUDE_TEMPLATES_DIR.extract(templates).context("Failed to extract templates.")?;
-                },
-            }
-        },
-        Err(err) => anyhow::bail!(format!("Failed to check if gedent home exists, caused by {:?}", err)),
+            println!("Generating default templates.");
+            let templates: PathBuf = [config_dir.clone(), Into::into(TEMPLATES_DIR)]
+                .iter()
+                .collect();
+            std::fs::create_dir(&templates).context("Failed to create templates dir.")?;
+            INCLUDE_TEMPLATES_DIR
+                .extract(templates)
+                .context("Failed to extract templates.")?;
+        }
+        Err(err) => anyhow::bail!("Failed to check if gedent home exists, caused by {:?}", err),
     }
 
     Ok(())
@@ -426,7 +440,7 @@ fn gedent_init(config: Option<PathBuf>) -> Result<(), Error> {
 }
 
 fn generate_input(
-    template: Template,
+    template: &Template,
     molecules: Vec<Molecule>,
     opts: GenOptions,
 ) -> Result<Vec<Input>, Error> {
@@ -481,7 +495,7 @@ fn generate_input(
         let filename = PathBuf::from(&template.name).with_extension(extension);
         let filename = filename
             .file_name()
-            .ok_or(anyhow!("Can't retrieve template name, exiting.."))?;
+            .ok_or_else(|| anyhow!("Can't retrieve template name, exiting.."))?;
 
         results.push(Input {
             filename: PathBuf::from(filename),

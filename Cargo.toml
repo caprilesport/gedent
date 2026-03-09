@@ -7,6 +7,8 @@ description = "A command-line interface to generate computational chemistry inpu
 repository = "https://github.com/caprilesport/gedent"
 license = "MIT"
 rust-version = "1.70.0"
+keywords = ["chemistry", "cli", "template", "orca", "gaussian"]
+categories = ["command-line-utilities", "science"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

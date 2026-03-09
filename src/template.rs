@@ -6,7 +6,7 @@ use serde::Deserialize;
 use serde_json::value::{from_value, to_value, Value};
 use std::collections::HashMap;
 use std::fs::{copy, read_dir, read_to_string};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tera::Tera;
 use walkdir::WalkDir;
 
@@ -16,7 +16,8 @@ const TEMPLATES_DIR: &str = "templates";
 #[derive(Clone, Debug)]
 pub struct Template {
     pub name: String,
-    template: String,
+    #[allow(clippy::struct_field_names)]
+    body: String,
     pub options: TemplateOptions,
 }
 
@@ -43,11 +44,12 @@ impl Template {
             .iter()
             .collect();
         copy(&boilerplate, &template_path).context(format!(
-            "Cant copy base {:?} template to {:?}",
-            &boilerplate, &template_path
+            "Cant copy base {} template to {}",
+            boilerplate.display(),
+            template_path.display()
         ))?;
         edit::edit_file(&template_path)
-            .context(format!("Cant open {:?} in editor.", template_path))?;
+            .context(format!("Cant open {} in editor.", template_path.display()))?;
         Ok(())
     }
 
@@ -55,42 +57,40 @@ impl Template {
         let mut tera = Tera::default();
         tera.register_function("print_molecule", print_molecule);
         tera.register_function("split_molecule", split_molecule);
-        tera.add_raw_template(&self.name, &self.template)?;
+        tera.add_raw_template(&self.name, &self.body)?;
         Ok(tera.render(&self.name, context)?)
     }
 
-    pub fn get_templates(templates_home: PathBuf) -> Result<Vec<String>, Error> {
+    pub fn get_templates(templates_home: &Path) -> Vec<String> {
         let home_len = templates_home.to_string_lossy().len();
-        let templates = WalkDir::new(&templates_home)
+        WalkDir::new(templates_home)
             .into_iter()
-            .filter_map(|e| e.ok())
+            .filter_map(std::result::Result::ok)
             .filter(|e| e.file_type().is_file())
             .map(|e| e.path().to_string_lossy()[home_len + 1..].to_string())
-            .collect();
-        Ok(templates)
+            .collect()
     }
 
-    pub fn get(template_name: String) -> Result<Template, Error> {
-        let (parsed, opts) =
-            Template::parse(&read_to_string(Template::find_path(&template_name)?)?)?;
-        let template = Template {
+    pub fn get(template_name: String) -> Result<Self, Error> {
+        let (parsed, opts) = Self::parse(&read_to_string(Self::find_path(&template_name)?)?)?;
+        let template = Self {
             name: template_name,
-            template: parsed,
+            body: parsed,
             options: opts,
         };
         Ok(template)
     }
 
-    pub fn print_template(template: String) -> Result<(), Error> {
-        let template_path = Template::find_path(&template)?;
+    pub fn print_template(template: &str) -> Result<(), Error> {
+        let template_path = Self::find_path(template)?;
         let template = read_to_string(&template_path)
-            .context(format!("Cant find template {:?}", template_path))?;
-        println!("{}", &template);
+            .context(format!("Cant find template {}", template_path.display()))?;
+        println!("{template}");
         Ok(())
     }
 
-    pub fn edit_template(template: String) -> Result<(), Error> {
-        let template_path = Template::find_path(&template)?;
+    pub fn edit_template(template: &str) -> Result<(), Error> {
+        let template_path = Self::find_path(template)?;
         // The edit crate makes this work in all platforms.
         edit::edit_file(template_path)?;
         Ok(())
@@ -100,9 +100,9 @@ impl Template {
         let templates_home: PathBuf = [get_gedent_home()?, Into::into(TEMPLATES_DIR)]
             .iter()
             .collect();
-        let templates = Template::get_templates(templates_home)?;
+        let templates = Self::get_templates(&templates_home);
         for i in templates {
-            println!("{}", i);
+            println!("{i}");
         }
         Ok(())
     }
@@ -139,7 +139,7 @@ impl Template {
         Ok((template, template_opts))
     }
 
-    fn find_path(template: &String) -> Result<PathBuf, Error> {
+    fn find_path(template: &str) -> Result<PathBuf, Error> {
         let template_path: PathBuf = [
             get_gedent_home()?,
             Into::into(TEMPLATES_DIR),
@@ -147,17 +147,18 @@ impl Template {
         ]
         .iter()
         .collect();
-        match template_path.try_exists()? {
-            true => Ok(template_path),
-            false => anyhow::bail!(format!("Cant find template {:?}.", template_path)),
+        if template_path.try_exists()? {
+            Ok(template_path)
+        } else {
+            anyhow::bail!("Cant find template {}.", template_path.display())
         }
     }
 
     #[cfg(test)]
-    fn new() -> Template {
-        Template {
-            name: "".to_string(),
-            template: "".to_string(),
+    fn new() -> Self {
+        Self {
+            name: String::new(),
+            body: String::new(),
             options: TemplateOptions {
                 extension: None,
                 // required_files: None,
@@ -170,12 +171,12 @@ pub fn select_template() -> Result<String, Error> {
     let templates_home: PathBuf = [get_gedent_home()?, Into::into(TEMPLATES_DIR)]
         .iter()
         .collect();
-    let templates = Template::get_templates(templates_home)?;
+    let templates = Template::get_templates(&templates_home);
     let selection = FuzzySelect::with_theme(&ColorfulTheme::default())
         .default(0)
         .items(&templates[..])
         .interact()?;
-    Ok(templates[selection].to_string())
+    Ok(templates[selection].clone())
 }
 
 pub fn select_software() -> Result<String, Error> {
@@ -184,14 +185,14 @@ pub fn select_software() -> Result<String, Error> {
             .iter()
             .collect::<PathBuf>(),
     )?
-    .filter_map(|e| e.ok())
+    .filter_map(std::result::Result::ok)
     .map(|e| e.path().file_name().unwrap().to_string_lossy().into_owned())
     .collect();
     let selection = FuzzySelect::with_theme(&ColorfulTheme::default())
         .default(0)
         .items(&softwares[..])
         .interact()?;
-    Ok(softwares[selection].to_string())
+    Ok(softwares[selection].clone())
 }
 
 // functions for the templates
@@ -201,8 +202,7 @@ pub fn print_molecule(args: &HashMap<String, Value>) -> Result<Value, tera::Erro
             Ok(v) => v,
             Err(_) => {
                 return Err(tera::Error::msg(format!(
-                    "Function `print_molecule` received an object of type {}, not `Molecule`",
-                    val
+                    "Function `print_molecule` received an object of type {val}, not `Molecule`"
                 )));
             }
         },
@@ -222,8 +222,7 @@ pub fn split_molecule(args: &HashMap<String, Value>) -> Result<Value, tera::Erro
             Ok(v) => v,
             Err(_) => {
                 return Err(tera::Error::msg(format!(
-                    "Function `split_molecule` received molecule={} but `molecule` can only be of type Molecule",
-                    val
+                    "Function `split_molecule` received molecule={val} but `molecule` can only be of type Molecule"
                 )));
             }
         },
@@ -239,8 +238,7 @@ pub fn split_molecule(args: &HashMap<String, Value>) -> Result<Value, tera::Erro
             Ok(v) => v,
             Err(_) => {
                 return Err(tera::Error::msg(format!(
-                    "Function `split_molecule` received index={} but `index` can only be of type integer.",
-                    val
+                    "Function `split_molecule` received index={val} but `index` can only be of type integer."
                 )));
             }
         },
@@ -255,8 +253,7 @@ pub fn split_molecule(args: &HashMap<String, Value>) -> Result<Value, tera::Erro
         Ok(molecules) => molecules,
         Err(err) => {
             return Err(tera::Error::msg(format!(
-                "Failed to split molecules, caused by {}",
-                err
+                "Failed to split molecules, caused by {err}"
             )))
         }
     };
@@ -292,7 +289,7 @@ end
 "
         .to_string();
         let template = Template {
-            template: parsed_template,
+            body: parsed_template,
             ..Template::new()
         };
 
@@ -313,7 +310,7 @@ end
     #[test]
     fn parse_template_works() {
         let mut template = Template::new();
-        template.template = "--@
+        template.body = "--@
 extension = \"inp\"
 --@
 ! {{ dft_level }} {{ dft_basis_set }}
@@ -338,7 +335,7 @@ end
 {% endif -%}"
             .to_string();
 
-        match Template::parse(&template.template) {
+        match Template::parse(&template.body) {
             Ok((template, opts)) => {
                 assert_eq!(template, test_parsed_template);
                 assert_eq!(opts.extension, Some("inp".to_string()))

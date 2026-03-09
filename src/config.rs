@@ -2,7 +2,7 @@ use anyhow::{anyhow, Context, Error, Result};
 use clap::ValueEnum;
 use dialoguer::{theme::ColorfulTheme, FuzzySelect};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use toml::{map::Map, Value};
 
 const CONFIG_NAME: &str = "gedent.toml";
@@ -18,7 +18,7 @@ pub struct Config {
     pub parameters: Map<String, Value>,
 }
 
-#[derive(Clone, Debug, Default, ValueEnum)]
+#[derive(Clone, Copy, Debug, Default, ValueEnum)]
 pub enum ArgType {
     #[default]
     String,
@@ -28,70 +28,61 @@ pub enum ArgType {
 }
 
 impl Config {
-    pub fn get() -> Result<Config, Error> {
-        let cfg_path = Config::get_path()?;
-        let cfg: Config = toml::from_str(&std::fs::read_to_string(&cfg_path)?)
-            .context(format!("Failed to read config file {:?}", cfg_path))?;
+    pub fn get() -> Result<Self, Error> {
+        let cfg_path = Self::get_path()?;
+        let cfg: Self = toml::from_str(&std::fs::read_to_string(&cfg_path)?)
+            .context(format!("Failed to read config file {}", cfg_path.display()))?;
         Ok(cfg)
     }
 
     pub fn print(self, location: bool) -> Result<(), Error> {
         if location {
-            println!("Config printed from: {:?}", Config::get_path()?)
+            println!("Config printed from: {}", Self::get_path()?.display());
         }
         for (k, v) in self.parameters {
-            println!("{}: {}", k, v);
+            println!("{k}: {v}");
         }
         Ok(())
     }
 
     pub fn edit() -> Result<(), Error> {
-        edit::edit_file(Config::get_path()?)?;
+        edit::edit_file(Self::get_path()?)?;
         Ok(())
     }
 
     pub fn write(&self) -> Result<(), Error> {
-        let cfg_path = Config::get_path()?;
+        let cfg_path = Self::get_path()?;
         std::fs::write(&cfg_path, toml::to_string(self)?)?;
-        println!("Config wrote to {:?}.", cfg_path);
+        println!("Config wrote to {}.", cfg_path.display());
         Ok(())
     }
 
-    pub fn set(&mut self, key: String, value: String) -> Result<(), Error> {
+    pub fn set(&mut self, key: &str, value: String) -> Result<(), Error> {
         let current_value = self
             .parameters
-            .get(&key)
-            .ok_or(anyhow!("Cant find {} in config.", key))?;
+            .get(key)
+            .ok_or_else(|| anyhow!("Cant find {} in config.", key))?
+            .clone();
 
-        println!(
-            "Changing config {}, from {} to {}.",
-            key, current_value, value
-        );
+        println!("Changing config {key}, from {current_value} to {value}.");
 
-        match current_value {
-            Value::String(_current_value) => {
-                self.parameters[&key] = Value::String(value);
-            }
-            Value::Float(_current_value) => {
-                self.parameters[&key] = Value::Float(value.parse::<f64>()?);
-            }
-            Value::Integer(_current_value) => {
-                self.parameters[&key] = Value::Integer(value.parse::<i64>()?);
-            }
-            Value::Boolean(_current_value) => {
-                self.parameters[&key] = Value::Boolean(value.parse::<bool>()?);
-            }
+        let new_value = match current_value {
+            Value::String(_) => Value::String(value),
+            Value::Float(_) => Value::Float(value.parse::<f64>()?),
+            Value::Integer(_) => Value::Integer(value.parse::<i64>()?),
+            Value::Boolean(_) => Value::Boolean(value.parse::<bool>()?),
             _ => anyhow::bail!("Unsupported type"),
-        }
+        };
+        self.parameters.insert(key.to_owned(), new_value);
 
         Ok(())
     }
 
-    pub fn delete(&mut self, key: String) -> Result<(), Error> {
+    pub fn delete(&mut self, key: &str) -> Result<(), Error> {
         self.parameters
-            .remove(&key)
-            .ok_or(anyhow!("Failed to remove key, not found."))?;
-        println!("Removed key {}.", key);
+            .remove(key)
+            .ok_or_else(|| anyhow!("Failed to remove key, not found."))?;
+        println!("Removed key {key}.");
         Ok(())
     }
 
@@ -100,10 +91,7 @@ impl Config {
             anyhow::bail!(format!("Config already contains {}, exiting.", key));
         }
 
-        println!(
-            "Setting config {} to {} with argtype {:?}",
-            key, value, toml_type
-        );
+        println!("Setting config {key} to {value} with argtype {toml_type:?}");
 
         // TODO: add array and table as well
         match toml_type {
@@ -129,32 +117,23 @@ impl Config {
 
     pub fn get_path() -> Result<PathBuf, Error> {
         let current_dir = std::env::current_dir()?;
-        let cfg_path: PathBuf = [Config::find(current_dir)?, PathBuf::from(CONFIG_NAME)]
-            .iter()
-            .collect();
-        Ok(cfg_path)
+        Ok(Self::find(&current_dir)?.join(CONFIG_NAME))
     }
 
-    fn find(dir: PathBuf) -> Result<PathBuf, Error> {
-        let cwd = dir.clone();
-        let gedent_config: PathBuf = [dir.clone(), PathBuf::from(CONFIG_NAME)].iter().collect();
-
-        if std::path::Path::try_exists(&gedent_config)? {
-            Ok(cwd)
+    fn find(dir: &Path) -> Result<PathBuf, Error> {
+        let gedent_config = dir.join(CONFIG_NAME);
+        if gedent_config.try_exists()? {
+            Ok(dir.to_path_buf())
         } else {
-            let parent_folder = dir.parent();
-            match parent_folder {
-                Some(parent) => Config::find(parent.to_path_buf()),
-                None => crate::get_gedent_home(),
-            }
+            dir.parent().map_or_else(get_gedent_home, Self::find)
         }
     }
 
     #[cfg(test)]
-    fn new() -> Config {
-        Config {
+    fn new() -> Self {
+        Self {
             gedent: GedentConfig {
-                default_extension: "".to_string(),
+                default_extension: String::new(),
             },
             parameters: Map::new(),
         }
@@ -163,13 +142,13 @@ impl Config {
 
 pub fn get_gedent_home() -> Result<PathBuf, Error> {
     let mut config_dir =
-        dirs::config_dir().ok_or(anyhow!("Cant retrieve system config directory."))?;
+        dirs::config_dir().ok_or_else(|| anyhow!("Cant retrieve system config directory."))?;
     config_dir.push("gedent");
     match config_dir.try_exists() {
         Ok(true) => (),
         Ok(false) => anyhow::bail!(
-            "Failed to retrieve gedent home, {:?} doesn't exist. \nCheck if you've finished the installation procces and created the config directory.",
-            config_dir
+            "Failed to retrieve gedent home, {} doesn't exist. \nCheck if you've finished the installation procces and created the config directory.",
+            config_dir.display()
         ),
         Err(err) => anyhow::bail!("Failed to retrieve gedent home, caused by {:?}", err),
     }
@@ -180,13 +159,13 @@ pub fn select_key(config: &Config) -> Result<String, Error> {
     let keys: Vec<&String> = config.parameters.keys().collect();
     let mut select = vec![];
     for (k, v) in &config.parameters {
-        select.push(format!("{} (current value: {})", &k, v));
+        select.push(format!("{k} (current value: {v})"));
     }
     let selection = FuzzySelect::with_theme(&ColorfulTheme::default())
         .default(0)
         .items(&select[..])
         .interact()?;
-    Ok(keys[selection].to_string())
+    Ok(keys[selection].clone())
 }
 
 #[cfg(test)]
@@ -216,7 +195,7 @@ mod tests {
         config
             .parameters
             .insert("testkey".to_string(), Value::Boolean(true));
-        match config.set("testkey".to_string(), "false".to_string()) {
+        match config.set("testkey", "false".to_string()) {
             Ok(_) => assert_eq!(config.parameters, final_config.parameters),
             Err(_) => core::panic!("Test failed to set key"),
         }
@@ -229,7 +208,7 @@ mod tests {
             .parameters
             .insert("testkey".to_string(), Value::Boolean(false));
         let config = Config::new();
-        match final_config.delete("testkey".to_string()) {
+        match final_config.delete("testkey") {
             Ok(_) => assert_eq!(final_config.parameters, config.parameters),
             Err(_) => core::panic!("Test failed to delete key"),
         }

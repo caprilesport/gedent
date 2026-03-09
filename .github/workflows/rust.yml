@@ -24,7 +24,7 @@ jobs:
         run: cargo fmt --check
 
       - name: Clippy
-        run: cargo clippy -- -D warnings
+        run: cargo clippy -- -D warnings -W clippy::pedantic -W clippy::nursery -W clippy::cargo
 
       - name: Build
         run: cargo build --verbose

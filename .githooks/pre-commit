@@ -7,7 +7,7 @@ echo "  fmt..."
 cargo fmt --check
 
 echo "  clippy..."
-cargo clippy -- -D warnings
+cargo clippy -- -D warnings -W clippy::pedantic -W clippy::nursery -W clippy::cargo
 
 echo "  test..."
 cargo test --quiet

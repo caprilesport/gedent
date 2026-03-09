@@ -2,7 +2,7 @@ use anyhow::{Context, Error, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-#[derive(PartialEq, Serialize, Deserialize, Debug, Clone)]
+#[derive(PartialEq, Eq, Serialize, Deserialize, Debug, Clone)]
 pub struct Molecule {
     pub filename: String,
     pub description: String,
@@ -10,15 +10,15 @@ pub struct Molecule {
 }
 
 impl Molecule {
-    fn new() -> Molecule {
-        Molecule {
-            filename: "".to_string(),
-            description: "".to_string(),
+    const fn new() -> Self {
+        Self {
+            filename: String::new(),
+            description: String::new(),
             atoms: Vec::new(),
         }
     }
 
-    pub fn split(&self, index: usize) -> Result<(Molecule, Molecule), Error> {
+    pub fn split(&self, index: usize) -> Result<(Self, Self), Error> {
         if index >= self.atoms.len() {
             anyhow::bail!(
                 "Can't split molecule at given index. \nIndex is bigger than size of molecule."
@@ -37,15 +37,15 @@ impl Molecule {
 
     // returns a vec because we support a file with multiple xyz
     // the check for atom length got kinda ugly.. see if there is some smarter way to do this
-    pub fn from_xyz(mut xyz_path: PathBuf) -> Result<Vec<Molecule>, Error> {
+    pub fn from_xyz(mut xyz_path: PathBuf) -> Result<Vec<Self>, Error> {
         let xyz_file = std::fs::read_to_string(&xyz_path)
-            .context(format!("Failed to read xyz file {:?}", xyz_path))?;
+            .context(format!("Failed to read xyz file {}", xyz_path.display()))?;
         xyz_path.set_extension("");
         let name = xyz_path.to_string_lossy().to_string();
-        let mut xyz_lines = xyz_file.lines().peekable();
-        let mut molecules: Vec<Molecule> = vec![];
-        let mut mol = Molecule::new();
-        mol.filename = name.clone();
+        let mut xyz_lines = xyz_file.lines();
+        let mut molecules: Vec<Self> = vec![];
+        let mut mol = Self::new();
+        mol.filename.clone_from(&name);
         let mut natoms = 0;
         let mut counter = 0;
 
@@ -54,8 +54,8 @@ impl Molecule {
                 None => {
                     if mol.atoms.len() != natoms {
                         anyhow::bail!(
-                            "Error parsing xyz files {:?}. \nExpected {} atoms found {}, exiting...",
-                            xyz_path,
+                            "Error parsing xyz files {}. \nExpected {} atoms found {}, exiting...",
+                            xyz_path.display(),
                             natoms,
                             mol.atoms.len()
                         )
@@ -63,9 +63,9 @@ impl Molecule {
                     match counter {
                         0 => (),
                         _ => {
-                            mol.filename = format!("{}_{}", name, counter);
+                            mol.filename = format!("{name}_{counter}");
                         }
-                    };
+                    }
                     molecules.push(mol.clone());
                     break;
                 }
@@ -74,14 +74,14 @@ impl Molecule {
                         if !mol.atoms.is_empty() {
                             if mol.atoms.len() != natoms {
                                 anyhow::bail!(
-                                    "Error parsing xyz files {:?}. \nExpected {} atoms found {}, exiting...",
-                                    xyz_path,
+                                    "Error parsing xyz files {}. \nExpected {} atoms found {}, exiting...",
+                                    xyz_path.display(),
                                     natoms,
                                     mol.atoms.len()
                                 )
                             }
                             natoms = 0;
-                            mol.filename = format!("{}_{}", name, counter);
+                            mol.filename = format!("{name}_{counter}");
                             molecules.push(mol.clone());
                             counter += 1;
                         }
