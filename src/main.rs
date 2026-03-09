@@ -1,10 +1,10 @@
-use crate::config::Config;
+use crate::config::{get_gedent_home, select_key, Config};
 use crate::molecule::Molecule;
-use crate::template::Template;
+use crate::template::{select_software, select_template, Template};
 use anyhow::{anyhow, Context, Error, Result};
 use clap::{Command, CommandFactory, Parser, Subcommand};
 use clap_complete::{generate, Generator, Shell};
-use dialoguer::{theme::ColorfulTheme, FuzzySelect};
+use dialoguer::theme::ColorfulTheme;
 use include_dir::{include_dir, Dir};
 use std::fs::{copy, read_dir, write};
 use std::io;
@@ -345,66 +345,6 @@ fn main() -> Result<()> {
 
 fn print_completions<G: Generator>(gen: G, cmd: &mut Command) {
     generate(gen, cmd, cmd.get_name().to_string(), &mut io::stdout());
-}
-
-//Search for paths
-fn get_gedent_home() -> Result<PathBuf, Error> {
-    let mut config_dir =
-        dirs::config_dir().ok_or(anyhow!("Cant retrieve system config directory."))?;
-    config_dir.push("gedent");
-    match config_dir.try_exists() {
-        Ok(exists) => {
-            match exists {
-                true => (),
-                false => anyhow::bail!(format!("Failed to retrieve gedent home, {:?} doesn't exist. \nCheck if you've finished the installation procces and created the config directory.", config_dir)), 
-            }
-        },
-        Err(err) => anyhow::bail!(format!("Failed to retrieve gedent home, caused by {:?}", err)), 
-    }
-    Ok(config_dir)
-}
-
-fn select_key(config: &Config) -> Result<String, Error> {
-    let keys: Vec<&String> = config.parameters.keys().collect();
-    let mut select = vec![];
-    for (k, v) in &config.parameters {
-        select.push(format!("{} (current value: {})", &k, v));
-    }
-    let selection = FuzzySelect::with_theme(&ColorfulTheme::default())
-        .default(0)
-        .items(&select[..])
-        .interact()?;
-    Ok(keys[selection].to_string())
-}
-
-fn select_template() -> Result<String, Error> {
-    let gedent_home: PathBuf = [get_gedent_home()?, Into::into(TEMPLATES_DIR)]
-        .iter()
-        .collect();
-    let templates = Template::get_templates(gedent_home)?;
-    let selection = FuzzySelect::with_theme(&ColorfulTheme::default())
-        .default(0)
-        .items(&templates[..])
-        .interact()
-        .unwrap();
-    Ok(templates[selection].to_string())
-}
-
-fn select_software() -> Result<String, Error> {
-    let softwares: Vec<String> = read_dir(
-        [get_gedent_home()?, Into::into(PRESETS_DIR)]
-            .iter()
-            .collect::<PathBuf>(),
-    )?
-    .filter_map(|e| e.ok())
-    .map(|e| e.path().file_name().unwrap().to_string_lossy().into_owned())
-    .collect();
-    let selection = FuzzySelect::with_theme(&ColorfulTheme::default())
-        .default(0)
-        .items(&softwares[..])
-        .interact()
-        .unwrap();
-    Ok(softwares[selection].to_string())
 }
 
 fn check_gedent_health() -> Result<(), Error> {

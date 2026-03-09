@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Context, Error, Result};
 use clap::ValueEnum;
+use dialoguer::{theme::ColorfulTheme, FuzzySelect};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use toml::{map::Map, Value};
@@ -158,6 +159,34 @@ impl Config {
             parameters: Map::new(),
         }
     }
+}
+
+pub fn get_gedent_home() -> Result<PathBuf, Error> {
+    let mut config_dir =
+        dirs::config_dir().ok_or(anyhow!("Cant retrieve system config directory."))?;
+    config_dir.push("gedent");
+    match config_dir.try_exists() {
+        Ok(true) => (),
+        Ok(false) => anyhow::bail!(
+            "Failed to retrieve gedent home, {:?} doesn't exist. \nCheck if you've finished the installation procces and created the config directory.",
+            config_dir
+        ),
+        Err(err) => anyhow::bail!("Failed to retrieve gedent home, caused by {:?}", err),
+    }
+    Ok(config_dir)
+}
+
+pub fn select_key(config: &Config) -> Result<String, Error> {
+    let keys: Vec<&String> = config.parameters.keys().collect();
+    let mut select = vec![];
+    for (k, v) in &config.parameters {
+        select.push(format!("{} (current value: {})", &k, v));
+    }
+    let selection = FuzzySelect::with_theme(&ColorfulTheme::default())
+        .default(0)
+        .items(&select[..])
+        .interact()?;
+    Ok(keys[selection].to_string())
 }
 
 #[cfg(test)]

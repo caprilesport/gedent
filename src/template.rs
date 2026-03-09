@@ -1,10 +1,11 @@
-use crate::get_gedent_home;
+use crate::config::get_gedent_home;
 use crate::Molecule;
 use anyhow::{Context, Error, Result};
+use dialoguer::{theme::ColorfulTheme, FuzzySelect};
 use serde::Deserialize;
 use serde_json::value::{from_value, to_value, Value};
 use std::collections::HashMap;
-use std::fs::{copy, read_to_string};
+use std::fs::{copy, read_dir, read_to_string};
 use std::path::PathBuf;
 use tera::Tera;
 use walkdir::WalkDir;
@@ -163,6 +164,34 @@ impl Template {
             },
         }
     }
+}
+
+pub fn select_template() -> Result<String, Error> {
+    let templates_home: PathBuf = [get_gedent_home()?, Into::into(TEMPLATES_DIR)]
+        .iter()
+        .collect();
+    let templates = Template::get_templates(templates_home)?;
+    let selection = FuzzySelect::with_theme(&ColorfulTheme::default())
+        .default(0)
+        .items(&templates[..])
+        .interact()?;
+    Ok(templates[selection].to_string())
+}
+
+pub fn select_software() -> Result<String, Error> {
+    let softwares: Vec<String> = read_dir(
+        [get_gedent_home()?, Into::into(PRESETS_DIR)]
+            .iter()
+            .collect::<PathBuf>(),
+    )?
+    .filter_map(|e| e.ok())
+    .map(|e| e.path().file_name().unwrap().to_string_lossy().into_owned())
+    .collect();
+    let selection = FuzzySelect::with_theme(&ColorfulTheme::default())
+        .default(0)
+        .items(&softwares[..])
+        .interact()?;
+    Ok(softwares[selection].to_string())
 }
 
 // functions for the templates
