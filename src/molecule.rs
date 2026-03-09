@@ -63,7 +63,7 @@ impl Molecule {
                     match counter {
                         0 => (),
                         _ => {
-                            mol.filename = [name.clone(), counter.to_string()].join("_");
+                            mol.filename = format!("{}_{}", name, counter);
                         }
                     };
                     molecules.push(mol.clone());
@@ -81,7 +81,7 @@ impl Molecule {
                                 )
                             }
                             natoms = 0;
-                            mol.filename = [name.clone(), counter.to_string()].join("_");
+                            mol.filename = format!("{}_{}", name, counter);
                             molecules.push(mol.clone());
                             counter += 1;
                         }

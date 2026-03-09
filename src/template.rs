@@ -120,8 +120,8 @@ impl Template {
 
     fn parse(raw_template: &str) -> Result<(String, TemplateOptions), Error> {
         let mut lines = raw_template.lines().peekable();
-        let mut header = "".to_string();
-        let mut template = "".to_string();
+        let mut header_lines: Vec<&str> = Vec::new();
+        let mut template_lines: Vec<&str> = Vec::new();
 
         while let Some(next) = lines.next() {
             if next.contains("--@") {
@@ -133,15 +133,17 @@ impl Template {
                             break;
                         }
                         Some(_) => {
-                            header = [header, lines.next().unwrap().to_string()].join("\n");
+                            header_lines.push(lines.next().unwrap());
                         }
                     }
                 }
             } else {
-                template = [template, next.to_string()].join("\n");
+                template_lines.push(next);
             }
         }
-        template = template.replacen('\n', "", 1); //remove first empty line
+
+        let header = header_lines.join("\n");
+        let template = template_lines.join("\n");
 
         let template_opts: TemplateOptions =
             toml::from_str(&header).context("Failed to parse template header")?;
@@ -194,13 +196,7 @@ pub fn print_molecule(args: &HashMap<String, Value>) -> Result<Value, tera::Erro
         }
     };
 
-    let mut full_molecule = "".to_string();
-    for atom in molecule.atoms {
-        full_molecule = [full_molecule, atom].join("\n");
-    }
-
-    full_molecule = full_molecule.replacen('\n', "", 1); //remove first empty line
-    Ok(to_value(full_molecule)?)
+    Ok(to_value(molecule.atoms.join("\n"))?)
 }
 
 pub fn split_molecule(args: &HashMap<String, Value>) -> Result<Value, tera::Error> {
