@@ -60,7 +60,7 @@ flag, not a system property).
 Future: `[chemistry]` may be sub-divided into `[solvation]`, `[relativistic]`, etc.
 when the validation pipeline (item 17) can act on them as groups. Not now.
 
-### 4b. Config cascade / inheritance
+### 4b. Config cascade / inheritance + gedent init rework
 **Status:** done
 Depends on item 4. Instead of stopping at the first `gedent.toml` found walking up
 from cwd, merge all configs in the chain. Deepest (closest to cwd) wins per key in

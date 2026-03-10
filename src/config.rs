@@ -14,14 +14,23 @@ pub struct GedentConfig {
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ChemistryConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub method: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub basis_set: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub charge: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub mult: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub dispersion: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub solvent: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub solvation_model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub nprocs: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub mem: Option<i64>,
 }
 

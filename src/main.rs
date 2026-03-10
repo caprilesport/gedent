@@ -7,7 +7,7 @@ use clap::{Command, CommandFactory, Parser, Subcommand};
 use clap_complete::{generate, Generator, Shell};
 use color_eyre::eyre::{bail, eyre, Report as Error, Result, WrapErr};
 use include_dir::{include_dir, Dir};
-use std::fs::{copy, read_dir, write};
+use std::fs::{read_dir, write};
 use std::io;
 use std::path::PathBuf;
 
@@ -134,8 +134,33 @@ enum Mode {
     // Subcommand for init gedent "repo"
     /// Initiate a gedent project in the current directory.
     Init {
-        // optional config to create when initiating the gedent repo
-        config: Option<PathBuf>,
+        /// Set method
+        #[arg(long, default_value = None)]
+        method: Option<String>,
+        /// Set `basis_set`
+        #[arg(long, default_value = None)]
+        basis_set: Option<String>,
+        /// Set dispersion
+        #[arg(long, default_value = None)]
+        dispersion: Option<String>,
+        /// Set solvent
+        #[arg(short, long, default_value = None)]
+        solvent: Option<String>,
+        /// Set `solvation_model`
+        #[arg(long, default_value = None)]
+        solvation_model: Option<String>,
+        /// Set charge
+        #[arg(short, long, default_value = None)]
+        charge: Option<i64>,
+        /// Set mult
+        #[arg(short, long, default_value = None)]
+        mult: Option<i64>,
+        /// Set nprocs
+        #[arg(long, default_value = None)]
+        nprocs: Option<i64>,
+        /// Set mem
+        #[arg(long, default_value = None)]
+        mem: Option<i64>,
     },
 }
 
@@ -268,7 +293,27 @@ fn main() -> Result<()> {
                 }
             },
 
-            Mode::Init { config } => gedent_init(config)?,
+            Mode::Init {
+                method,
+                basis_set,
+                dispersion,
+                solvent,
+                solvation_model,
+                charge,
+                mult,
+                nprocs,
+                mem,
+            } => gedent_init(ChemistryConfig {
+                method,
+                basis_set,
+                charge,
+                mult,
+                dispersion,
+                solvent,
+                solvation_model,
+                nprocs,
+                mem,
+            })?,
         }
     }
 
@@ -352,18 +397,33 @@ fn setup_gedent() -> Result<(), Error> {
     Ok(())
 }
 
-// copy the specified or currently used config to cwd
-fn gedent_init(config: Option<PathBuf>) -> Result<(), Error> {
-    let config_path = match config {
-        Some(file) => file,
-        None => Config::gedent_home()?.join("gedent.toml"),
-    };
-
+fn gedent_init(chemistry: ChemistryConfig) -> Result<(), Error> {
     if std::path::Path::try_exists(&PathBuf::from("./gedent.toml"))? {
         bail!("gedent.toml already exists, exiting...");
     }
 
-    copy(config_path, "./gedent.toml")?;
+    let no_flags_set = chemistry.method.is_none()
+        && chemistry.basis_set.is_none()
+        && chemistry.dispersion.is_none()
+        && chemistry.solvent.is_none()
+        && chemistry.solvation_model.is_none()
+        && chemistry.charge.is_none()
+        && chemistry.mult.is_none()
+        && chemistry.nprocs.is_none()
+        && chemistry.mem.is_none();
+
+    let content = if no_flags_set {
+        "[chemistry]\n\n[parameters]\n".to_string()
+    } else {
+        #[derive(serde::Serialize)]
+        struct InitConfig {
+            chemistry: ChemistryConfig,
+        }
+        toml::to_string(&InitConfig { chemistry }).wrap_err("Failed to serialize init config")?
+    };
+
+    write("./gedent.toml", content).wrap_err("Failed to write gedent.toml")?;
+    println!("Created gedent.toml.");
     Ok(())
 }
 
