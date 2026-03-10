@@ -1,23 +1,24 @@
 {#
 software = "orca"
-jobtype = "neb"
-requires = ["method", "basis_set", "charge", "mult", "nprocs", "mem", "Molecule"]
-description = "Nudged elastic band — provide reactant as input, place product as name.end.xyz"
+jobtype = "zora"
+requires = ["method", "basis_set", "charge", "mult", "nprocs", "mem", "Molecule", "zoraatoms", "zora_basis", "zora_aux_basis"]
+description = "Single point with ZORA relativistic correction for core-related properties"
 #}
 ! {{ method }} {{ basis_set }}{% if dispersion is defined %} {{ dispersion }}{% endif %}{% if solvation %}{% if solvation_model is defined and solvation_model == "alpb" %} ALPB({{ solvent }}){% elif solvation_model is defined and solvation_model == "cpcm" %} CPCM({{ solvent }}){% else %} SMD({{ solvent }}){% endif %}{% endif %}
-! NEB
+! ZORA
 
+{% for atom in zoraatoms -%}
+%basis
+ NewGTO {{ atom }} "{{ zora_basis }}" end
+ NewAuxGTO {{ atom }} "{{ zora_aux_basis }}" end
+end
+
+{% endfor -%}
 %pal
  nprocs {{ nprocs }}
 end
 
 %maxcore {{ mem }}
-
-%neb
- neb_end_xyzfile "{{ name }}.end.xyz"
- nimages {% if nimages is defined %}{{ nimages }}{% else %}12{% endif %}
- preopt_ends true
-end
 
 *xyz {{ charge }} {{ mult }}
 {{ print_molecule(molecule = Molecule) }}

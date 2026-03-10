@@ -8,7 +8,7 @@ charge = 0
 mult = 1
 dispersion = "D3"
 solvent = "water"
-solvation_model = "CPCM"
+solvation_model = "smd"
 
 [resources]
 nprocs = 20

@@ -1,11 +1,11 @@
 {#
 software = "orca"
-jobtype = "neb"
+jobtype = "nbo"
 requires = ["method", "basis_set", "charge", "mult", "nprocs", "mem", "Molecule"]
-description = "Nudged elastic band — provide reactant as input, place product as name.end.xyz"
+description = "NBO analysis with deletion"
 #}
 ! {{ method }} {{ basis_set }}{% if dispersion is defined %} {{ dispersion }}{% endif %}{% if solvation %}{% if solvation_model is defined and solvation_model == "alpb" %} ALPB({{ solvent }}){% elif solvation_model is defined and solvation_model == "cpcm" %} CPCM({{ solvent }}){% else %} SMD({{ solvent }}){% endif %}{% endif %}
-! NEB
+! NBO
 
 %pal
  nprocs {{ nprocs }}
@@ -13,10 +13,9 @@ end
 
 %maxcore {{ mem }}
 
-%neb
- neb_end_xyzfile "{{ name }}.end.xyz"
- nimages {% if nimages is defined %}{{ nimages }}{% else %}12{% endif %}
- preopt_ends true
+%nbo
+ nbokeylist="$nbo nbo npa aonbo=c archive $end"
+ delkeylist="$del lewis $end"
 end
 
 *xyz {{ charge }} {{ mult }}

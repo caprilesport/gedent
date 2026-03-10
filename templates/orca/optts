@@ -1,11 +1,11 @@
 {#
 software = "orca"
-jobtype = "neb"
-requires = ["method", "basis_set", "charge", "mult", "nprocs", "mem", "Molecule"]
-description = "Nudged elastic band — provide reactant as input, place product as name.end.xyz"
+jobtype = "optts"
+requires = ["method", "basis_set", "charge", "mult", "nprocs", "mem", "Molecule", "ts_active_atoms"]
+description = "Transition state optimization with hybrid hessian and numerical frequency"
 #}
 ! {{ method }} {{ basis_set }}{% if dispersion is defined %} {{ dispersion }}{% endif %}{% if solvation %}{% if solvation_model is defined and solvation_model == "alpb" %} ALPB({{ solvent }}){% elif solvation_model is defined and solvation_model == "cpcm" %} CPCM({{ solvent }}){% else %} SMD({{ solvent }}){% endif %}{% endif %}
-! NEB
+! OptTS SlowConv NumFreq
 
 %pal
  nprocs {{ nprocs }}
@@ -13,10 +13,11 @@ end
 
 %maxcore {{ mem }}
 
-%neb
- neb_end_xyzfile "{{ name }}.end.xyz"
- nimages {% if nimages is defined %}{{ nimages }}{% else %}12{% endif %}
- preopt_ends true
+%geom
+ maxiter {% if maxiter is defined %}{{ maxiter }}{% else %}256{% endif %}
+ ts_active_atoms { {{ ts_active_atoms }} } end
+ calc_hess true
+ hybrid_hess { {{ ts_active_atoms }} } end
 end
 
 *xyz {{ charge }} {{ mult }}

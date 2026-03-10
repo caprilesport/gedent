@@ -1,0 +1,29 @@
+{#
+software = "crest"
+jobtype = "conformers"
+requires = ["nprocs"]
+description = "CREST iMTD-GC conformer ensemble search"
+#}
+# CREST input file
+input='{{ name }}.xyz'
+runtype='imtd-gc'
+multilevelopt=false
+
+# parallelization
+threads={{ nprocs }}
+
+# calculation data
+[calculation]
+[[calculation.level]]
+method="gfnff"
+weight=1.0
+
+[[calculation.constraints]]
+bonds='all'
+
+[[calculation.level]]
+method='gfn2'
+
+# molecular dynamics data (active for GFN-FF level only)
+[dynamics]
+active=[1]

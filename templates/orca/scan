@@ -1,23 +1,21 @@
 {#
 software = "orca"
 jobtype = "scan"
-requires = ["method", "basis_set", "charge", "mult", "Molecule"]
-description = "Relaxed surface scan"
+requires = ["method", "basis_set", "charge", "mult", "nprocs", "mem", "Molecule", "scan_atoms", "scan_start", "scan_end", "scan_steps"]
+description = "Relaxed surface scan — set scan_atoms, scan_start, scan_end, scan_steps in [parameters]"
 #}
-! {{ method }} {{ basis_set }}
+! {{ method }} {{ basis_set }}{% if dispersion is defined %} {{ dispersion }}{% endif %}{% if solvation %}{% if solvation_model is defined and solvation_model == "alpb" %} ALPB({{ solvent }}){% elif solvation_model is defined and solvation_model == "cpcm" %} CPCM({{ solvent }}){% else %} SMD({{ solvent }}){% endif %}{% endif %}
 ! Opt
 
-{% if solvation -%}
-%cpcm
- smd true
- smdsolvent "{{ solvent }}"
+%pal
+ nprocs {{ nprocs }}
 end
 
-{% endif -%}
+%maxcore {{ mem }}
 
 %geom
  scan
-  B 12 23 = 2.21803, 1.19935, 21 # B atom1 atom2 = beginning, end, steps
+  B {{ scan_atoms }} = {{ scan_start }}, {{ scan_end }}, {{ scan_steps }}
  end
 end
 

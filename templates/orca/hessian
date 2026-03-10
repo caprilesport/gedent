@@ -1,0 +1,17 @@
+{#
+software = "orca"
+jobtype = "hessian"
+requires = ["charge", "mult", "nprocs", "mem", "Molecule"]
+description = "XTB2 numerical frequency for use as initial hessian in subsequent jobs"
+#}
+! XTB2 NumFreq{% if solvation %} ALPB({{ solvent }}){% endif %}
+
+%pal
+ nprocs {{ nprocs }}
+end
+
+%maxcore {{ mem }}
+
+*xyz {{ charge }} {{ mult }}
+{{ print_molecule(molecule = Molecule) }}
+*

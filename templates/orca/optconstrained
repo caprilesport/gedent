@@ -1,11 +1,11 @@
 {#
 software = "orca"
-jobtype = "neb"
+jobtype = "optconstrained"
 requires = ["method", "basis_set", "charge", "mult", "nprocs", "mem", "Molecule"]
-description = "Nudged elastic band — provide reactant as input, place product as name.end.xyz"
+description = "Constrained geometry optimization — edit the Constraints block before use"
 #}
 ! {{ method }} {{ basis_set }}{% if dispersion is defined %} {{ dispersion }}{% endif %}{% if solvation %}{% if solvation_model is defined and solvation_model == "alpb" %} ALPB({{ solvent }}){% elif solvation_model is defined and solvation_model == "cpcm" %} CPCM({{ solvent }}){% else %} SMD({{ solvent }}){% endif %}{% endif %}
-! NEB
+! Opt
 
 %pal
  nprocs {{ nprocs }}
@@ -13,10 +13,20 @@ end
 
 %maxcore {{ mem }}
 
-%neb
- neb_end_xyzfile "{{ name }}.end.xyz"
- nimages {% if nimages is defined %}{{ nimages }}{% else %}12{% endif %}
- preopt_ends true
+{% if maxiter is defined -%}
+%geom
+ maxiter {{ maxiter }}
+end
+
+{% endif -%}
+%geom
+ Constraints
+  {B 0 1 C}           # Constrain a bond
+  {B 0 1 1.34 C}      # Constrain a bond at 1.34 Angstrom
+  {A 0 1 2 C}         # Constrain an angle
+  {D 0 1 2 3 C}       # Constrain a dihedral
+  {C 5 C}             # Constrain atom 5 in space
+ end
 end
 
 *xyz {{ charge }} {{ mult }}

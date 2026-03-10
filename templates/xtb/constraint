@@ -1,0 +1,12 @@
+{#
+software = "xtb"
+jobtype = "constraint"
+requires = []
+description = "XTB constraint file — edit atoms and values as needed, pass with --input flag"
+#}
+$constrain
+  force constant=0.5
+  distance: 12, 32, auto
+  distance: 32, 35, auto
+  angle: 12, 32, 35, 180
+$end

@@ -9,12 +9,12 @@ description = "Geometry optimization and frequency"
 {%else-%}
 {%set solvent=""-%}
 {%endif-%}
-%chk={{ Molecule.filename }}.chk
+%chk={{ name }}.chk
 %nproc={{ nprocs }}
 %mem={{ mem }}GB
 # {{ method }}/{{ basis_set }} opt freq=noraman {{ solvent }}
 
-job title: {{ Molecule.filename }}
+job title: {{ name }}
 
 {{ charge }} {{ mult }}
 {{ print_molecule(molecule=Molecule) }}

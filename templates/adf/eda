@@ -9,7 +9,7 @@ AMS_JOBNAME=eda $AMSBIN/ams <<eor
 Task SinglePoint
 
 Engine adf
-	title {{ Molecule.filename }}
+	title {{ name }}
 
 	ETSNOCV
 		RHOKmin 1e-3

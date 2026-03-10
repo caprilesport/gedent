@@ -1,0 +1,17 @@
+{#
+software = "orca"
+jobtype = "ccsdt"
+requires = ["charge", "mult", "nprocs", "mem", "Molecule"]
+description = "DLPNO-CCSD(T)/def2-TZVP single point"
+#}
+! DLPNO-CCSD(T) gCP(HF/TZ) def2-TZVP def2-TZVP/C TightSCF defgrid3{% if solvation %}{% if solvation_model is defined and solvation_model == "alpb" %} ALPB({{ solvent }}){% elif solvation_model is defined and solvation_model == "cpcm" %} CPCM({{ solvent }}){% else %} SMD({{ solvent }}){% endif %}{% endif %}
+
+%pal
+ nprocs {{ nprocs }}
+end
+
+%maxcore {{ mem }}
+
+*xyz {{ charge }} {{ mult }}
+{{ print_molecule(molecule = Molecule) }}
+*

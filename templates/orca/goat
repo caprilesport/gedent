@@ -1,0 +1,17 @@
+{#
+software = "orca"
+jobtype = "goat"
+requires = ["charge", "mult", "nprocs", "mem", "Molecule"]
+description = "Conformer sampling with GOAT at XTB level"
+#}
+! XTB GOAT{% if solvation %} ALPB({{ solvent }}){% endif %}
+
+%pal
+ nprocs {{ nprocs }}
+end
+
+%maxcore {{ mem }}
+
+*xyz {{ charge }} {{ mult }}
+{{ print_molecule(molecule = Molecule) }}
+*

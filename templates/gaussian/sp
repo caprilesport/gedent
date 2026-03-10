@@ -13,7 +13,7 @@ description = "Single point energy"
 %mem={{ mem }}GB
 # {{ method }}/{{ basis_set }} {{ solvent }}
 
-job title: {{ Molecule.filename }}
+job title: {{ name }}
 
 {{ charge }} {{ mult }}
 {{ print_molecule(molecule=Molecule) }}

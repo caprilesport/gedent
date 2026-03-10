@@ -2,10 +2,10 @@
 software = "orca"
 jobtype = "opt"
 requires = ["method", "basis_set", "charge", "mult", "nprocs", "mem", "Molecule"]
-description = "Geometry optimization and frequency"
+description = "Geometry optimization"
 #}
-! {{ method }} {{ basis_set }}
-! Opt freq D3BJ
+! {{ method }} {{ basis_set }}{% if dispersion is defined %} {{ dispersion }}{% endif %}{% if solvation %}{% if solvation_model is defined and solvation_model == "alpb" %} ALPB({{ solvent }}){% elif solvation_model is defined and solvation_model == "cpcm" %} CPCM({{ solvent }}){% else %} SMD({{ solvent }}){% endif %}{% endif %}
+! Opt
 
 %pal
  nprocs {{ nprocs }}
@@ -13,22 +13,19 @@ end
 
 %maxcore {{ mem }}
 
-{% if solvation -%}
-%cpcm
- smd true
- smdsolvent "{{ solvent }}"
+{% if maxiter is defined -%}
+%geom
+ maxiter {{ maxiter }}
 end
 
 {% endif -%}
-
-{% if start_hessian -%}
-%Geom
+{% if start_hessian is defined and start_hessian -%}
+%geom
  InHess Read
- InHessName "{{ Molecule.filename }}.hess"
+ InHessName "{{ name }}.hess"
 end
 
 {% endif -%}
-
 *xyz {{ charge }} {{ mult }}
 {{ print_molecule(molecule = Molecule) }}
 *

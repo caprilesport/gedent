@@ -1,23 +1,16 @@
 {#
 software = "orca"
-jobtype = "neb"
+jobtype = "sp"
 requires = ["method", "basis_set", "charge", "mult", "nprocs", "mem", "Molecule"]
-description = "Nudged elastic band — provide reactant as input, place product as name.end.xyz"
+description = "Single point energy"
 #}
 ! {{ method }} {{ basis_set }}{% if dispersion is defined %} {{ dispersion }}{% endif %}{% if solvation %}{% if solvation_model is defined and solvation_model == "alpb" %} ALPB({{ solvent }}){% elif solvation_model is defined and solvation_model == "cpcm" %} CPCM({{ solvent }}){% else %} SMD({{ solvent }}){% endif %}{% endif %}
-! NEB
 
 %pal
  nprocs {{ nprocs }}
 end
 
 %maxcore {{ mem }}
-
-%neb
- neb_end_xyzfile "{{ name }}.end.xyz"
- nimages {% if nimages is defined %}{{ nimages }}{% else %}12{% endif %}
- preopt_ends true
-end
 
 *xyz {{ charge }} {{ mult }}
 {{ print_molecule(molecule = Molecule) }}

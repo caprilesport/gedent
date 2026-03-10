@@ -1,11 +1,11 @@
 {#
 software = "orca"
-jobtype = "neb"
+jobtype = "neb-ts"
 requires = ["method", "basis_set", "charge", "mult", "nprocs", "mem", "Molecule"]
-description = "Nudged elastic band — provide reactant as input, place product as name.end.xyz"
+description = "NEB-TS transition state search — place product as name.end.xyz, optionally set ts_active_atoms in [parameters]"
 #}
 ! {{ method }} {{ basis_set }}{% if dispersion is defined %} {{ dispersion }}{% endif %}{% if solvation %}{% if solvation_model is defined and solvation_model == "alpb" %} ALPB({{ solvent }}){% elif solvation_model is defined and solvation_model == "cpcm" %} CPCM({{ solvent }}){% else %} SMD({{ solvent }}){% endif %}{% endif %}
-! NEB
+! NEB-TS
 
 %pal
  nprocs {{ nprocs }}
@@ -15,10 +15,17 @@ end
 
 %neb
  neb_end_xyzfile "{{ name }}.end.xyz"
- nimages {% if nimages is defined %}{{ nimages }}{% else %}12{% endif %}
+ nimages {% if nimages is defined %}{{ nimages }}{% else %}14{% endif %}
  preopt_ends true
 end
 
+{% if ts_active_atoms is defined -%}
+%geom
+ ts_active_atoms { {{ ts_active_atoms }} } end
+ maxiter 256
+end
+
+{% endif -%}
 *xyz {{ charge }} {{ mult }}
 {{ print_molecule(molecule = Molecule) }}
 *

@@ -1,0 +1,22 @@
+{#
+software = "orca"
+jobtype = "nmr"
+requires = ["charge", "mult", "nprocs", "mem", "Molecule"]
+description = "NMR chemical shifts (TPSS/pcsseg-1, 1H)"
+#}
+! TPSS pcsseg-1 AUTOAUX NMR{% if solvation %}{% if solvation_model is defined and solvation_model == "alpb" %} ALPB({{ solvent }}){% elif solvation_model is defined and solvation_model == "cpcm" %} CPCM({{ solvent }}){% else %} SMD({{ solvent }}){% endif %}{% endif %}
+
+%pal
+ nprocs {{ nprocs }}
+end
+
+%maxcore {{ mem }}
+
+*xyz {{ charge }} {{ mult }}
+{{ print_molecule(molecule = Molecule) }}
+*
+
+%EPRNMR
+   NUCLEI = ALL H {SHIFT, SSALL}
+   TAU DOBSON
+END

@@ -1,11 +1,11 @@
 {#
 software = "orca"
-jobtype = "neb"
+jobtype = "irc"
 requires = ["method", "basis_set", "charge", "mult", "nprocs", "mem", "Molecule"]
-description = "Nudged elastic band — provide reactant as input, place product as name.end.xyz"
+description = "Intrinsic reaction coordinate — requires a prior hessian file (name.hess)"
 #}
 ! {{ method }} {{ basis_set }}{% if dispersion is defined %} {{ dispersion }}{% endif %}{% if solvation %}{% if solvation_model is defined and solvation_model == "alpb" %} ALPB({{ solvent }}){% elif solvation_model is defined and solvation_model == "cpcm" %} CPCM({{ solvent }}){% else %} SMD({{ solvent }}){% endif %}{% endif %}
-! NEB
+! IRC KDIIS SOSCF TightSCF
 
 %pal
  nprocs {{ nprocs }}
@@ -13,10 +13,12 @@ end
 
 %maxcore {{ mem }}
 
-%neb
- neb_end_xyzfile "{{ name }}.end.xyz"
- nimages {% if nimages is defined %}{{ nimages }}{% else %}12{% endif %}
- preopt_ends true
+%irc
+ maxiter 40
+ TolRMSG  3.e-4
+ TolMaxG  1.e-3
+ InitHess read
+ Hess_Filename "{{ name }}.hess"
 end
 
 *xyz {{ charge }} {{ mult }}
