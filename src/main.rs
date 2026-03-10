@@ -1,6 +1,6 @@
 #![allow(clippy::multiple_crate_versions)]
 
-use crate::config::{get_gedent_home, Config};
+use crate::config::{get_gedent_home, ChemistryConfig, Config};
 use crate::molecule::Molecule;
 use crate::template::Template;
 use clap::{Command, CommandFactory, Parser, Subcommand};
@@ -31,11 +31,11 @@ struct GenOptions {
     #[allow(clippy::option_option)]
     solvent: Option<Option<String>>,
     solvation_model: Option<String>,
-    charge: Option<usize>,
+    charge: Option<i64>,
     hessian: bool,
-    mult: Option<usize>,
-    nprocs: Option<usize>,
-    mem: Option<usize>,
+    mult: Option<i64>,
+    nprocs: Option<i64>,
+    mem: Option<i64>,
 }
 
 #[derive(Debug)]
@@ -105,19 +105,19 @@ enum Mode {
         solvation_model: Option<String>,
         /// Set charge
         #[arg(short, long, default_value = None)]
-        charge: Option<usize>,
+        charge: Option<i64>,
         /// Set hessian
         #[arg(long, default_value_t = false)]
         hessian: bool,
         /// Set mult
         #[arg(short, long, default_value = None)]
-        mult: Option<usize>,
+        mult: Option<i64>,
         /// Set nprocs
         #[arg(long, default_value = None)]
-        nprocs: Option<usize>,
+        nprocs: Option<i64>,
         /// Set mem
         #[arg(long, default_value = None)]
-        mem: Option<usize>,
+        mem: Option<i64>,
     },
     // Subcommand to deal with configurations
     /// Access gedent configuration
@@ -250,7 +250,7 @@ fn main() -> Result<()> {
                     nprocs,
                     mem,
                 };
-                let results = generate_input(&template, molecules, opts)?;
+                let results = generate_input(&template, molecules, &opts)?;
                 for input in results {
                     if print {
                         println!("{}", input.content);
@@ -404,28 +404,46 @@ fn gedent_init(config: Option<PathBuf>) -> Result<(), Error> {
     Ok(())
 }
 
-fn generate_input(
-    template: &Template,
-    molecules: Vec<(PathBuf, Molecule)>,
-    opts: GenOptions,
-) -> Result<Vec<Input>, Error> {
+fn build_context(chemistry: &ChemistryConfig, opts: &GenOptions) -> tera::Context {
     let mut context = tera::Context::new();
-    let config = Config::get()?;
-    for (key, value) in config.parameters {
-        context.insert(key, &value);
-    }
 
-    if let Some(solvation) = opts.solvent {
+    // Layer 1: chemistry config (base)
+    let chem = chemistry;
+    if let Some(ref v) = chem.solvent {
         context.insert("solvation", &true);
-        if let Some(solvent) = solvation {
-            context.insert("solvent", &solvent);
+        context.insert("solvent", v);
+    }
+    for (k, v) in [
+        ("method", chem.method.as_deref()),
+        ("basis_set", chem.basis_set.as_deref()),
+        ("dispersion", chem.dispersion.as_deref()),
+        ("solvation_model", chem.solvation_model.as_deref()),
+    ] {
+        if let Some(v) = v {
+            context.insert(k, v);
+        }
+    }
+    for (k, v) in [
+        ("charge", chem.charge),
+        ("mult", chem.mult),
+        ("nprocs", chem.nprocs),
+        ("mem", chem.mem),
+    ] {
+        if let Some(v) = v {
+            context.insert(k, &v);
         }
     }
 
-    if opts.hessian {
-        context.insert("hessian", &opts.hessian);
+    // Layer 2: CLI overrides (win over config)
+    if let Some(solvation) = opts.solvent.as_ref() {
+        context.insert("solvation", &true);
+        if let Some(solvent) = solvation {
+            context.insert("solvent", solvent);
+        }
     }
-
+    if opts.hessian {
+        context.insert("hessian", &true);
+    }
     for (k, v) in [
         ("charge", opts.charge),
         ("mult", opts.mult),
@@ -436,16 +454,30 @@ fn generate_input(
             context.insert(k, &v);
         }
     }
-
     for (k, v) in [
-        ("method", opts.method),
-        ("basis_set", opts.basis_set),
-        ("dispersion", opts.dispersion),
-        ("solvation_model", opts.solvation_model),
+        ("method", opts.method.as_deref()),
+        ("basis_set", opts.basis_set.as_deref()),
+        ("dispersion", opts.dispersion.as_deref()),
+        ("solvation_model", opts.solvation_model.as_deref()),
     ] {
         if let Some(v) = v {
-            context.insert(k, &v);
+            context.insert(k, v);
         }
+    }
+
+    context
+}
+
+fn generate_input(
+    template: &Template,
+    molecules: Vec<(PathBuf, Molecule)>,
+    opts: &GenOptions,
+) -> Result<Vec<Input>, Error> {
+    let config = Config::get()?;
+
+    let mut context = build_context(&config.chemistry, opts);
+    for (key, value) in config.parameters {
+        context.insert(key, &value);
     }
 
     let extension = opts

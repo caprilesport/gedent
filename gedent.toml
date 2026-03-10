@@ -1,17 +1,16 @@
 [gedent]
 default_extension = "inp"
 
-[parameters]
-basis_set = "def2svp"
-charge = 1
+[chemistry]
 method = "BP86"
-method_class = "GGA"
-mem = 3000
+basis_set = "def2svp"
+charge = 0
 mult = 1
-nprocs = 20
-solvation = false
-solvent = "water"
-split_index = 10
-hessian = false
-solvation_model = "CPCM"
 dispersion = "D3"
+solvent = "water"
+solvation_model = "CPCM"
+nprocs = 20
+mem = 3000
+
+[parameters]
+method_class = "GGA"

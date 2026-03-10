@@ -28,15 +28,93 @@ In practice a single xyz file per invocation is the common case. The multi-molec
 loop logic and the `_0`/`_1` filename suffixing is the main source of parser
 complexity. Remove it. Can be re-added later on top of a cleaner base.
 
-### 4. Improve abstractions / domain model
+### 4. Introduce `[chemistry]` section in config
+**Status:** done
+The current `[parameters]` section mixes two distinct concerns: first-class chemistry
+parameters (method, basis_set, charge, mult, solvent, etc.) and user-defined free-form
+template variables. Separate them:
+
+```toml
+[gedent]
+default_extension = "inp"
+
+[chemistry]          # typed, validated by gedent, maps to GenOptions
+method = "pbe0"
+basis_set = "def2-tzvp"
+charge = 0
+mult = 1
+dispersion = "d3bj"
+solvent = "water"
+solvation_model = "cpcm"
+nprocs = 4
+mem = 8000
+
+[parameters]         # free-form user context, passed through to Tera as-is
+my_custom_var = "foo"
+```
+
+CLI flags override `[chemistry]` values. `[parameters]` entries are never validated,
+just inserted into the Tera context verbatim. `hessian` stays CLI-only (job-type
+flag, not a system property).
+
+Future: `[chemistry]` may be sub-divided into `[solvation]`, `[relativistic]`, etc.
+when the validation pipeline (item 17) can act on them as groups. Not now.
+
+### 4b. Config cascade / inheritance
 **Status:** not started
-Depends on items 1–3. Once `Atom` is a real type and the parser is clean, revisit
-the `Molecule` struct and `generate_input` to make the domain model feel right.
-`generate_input` currently does context-building, rendering, and output in one
-function — split these apart.
+Depends on item 4. Instead of stopping at the first `gedent.toml` found walking up
+from cwd, merge all configs in the chain. Deepest (closest to cwd) wins per key in
+both `[chemistry]` and `[parameters]`. The global `~/.config/gedent/gedent.toml`
+is the base.
+
+Example:
+```
+~/.config/gedent/gedent.toml   ← base: method=pbe0, basis=def2-tzvp, nprocs=8
+~/projects/reaction/
+  gedent.toml                  ← override: charge=0, mult=1
+  proton_transfer/
+    gedent.toml                ← override: charge=1, mult=2
+```
+
+Running `gedent gen` from `proton_transfer/` sees charge=1, mult=2, method=pbe0,
+basis=def2-tzvp, nprocs=8. This makes it natural to share a project-level config
+and only override what changes per calculation directory.
+
+**`gedent init` rework:** the current behavior (copy the full resolved config to
+`./gedent.toml`) is counterproductive in a cascade model — you'd end up with a
+redundant full copy that obscures what you actually intend to override locally.
+Replace with explicit key scaffolding: `gedent init` accepts chemistry flags and
+writes a minimal override file containing only those keys:
+
+```
+gedent init --charge 1 --mult 2
+```
+
+produces:
+```toml
+[chemistry]
+charge = 1
+mult = 2
+```
+
+Running `gedent init` with no flags creates an empty `gedent.toml` with bare section
+headers as a blank slate. The cascade handles the rest.
+
+### 4c. Improve abstractions / domain model — split `generate_input`
+**Status:** not started
+Depends on items 4 and 4b. With `[chemistry]` as a typed struct and the cascade
+in place, split `generate_input` into focused pieces:
+- `build_context(chemistry: &ChemistryConfig, params: &ParamsMap, opts: &GenOptions) -> tera::Context`
+  — pure function, no I/O, testable. Takes the merged chemistry config + CLI
+  overrides and builds the base Tera context. This is also the hook point for the
+  validation pipeline (item 17).
+- `Template::render_with_molecule(context: &tera::Context, molecule: &Molecule, stem: &str) -> Result<String>`
+  — molecule insertion lives in `Template`, where it belongs.
+- `generate_input` becomes a thin coordinator: merge config, call `build_context`,
+  loop over molecules, collect `Vec<Input>`.
 
 ### 5. Replace `anyhow` with `color_eyre`
-**Status:** not started
+**Status:** done
 `color_eyre` (built on `eyre`, a fork of `anyhow` with the same API) adds three
 things that matter for a CLI:
 - Colorized, structured error output in the terminal

@@ -11,9 +11,25 @@ pub struct GedentConfig {
     pub default_extension: String,
 }
 
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct ChemistryConfig {
+    pub method: Option<String>,
+    pub basis_set: Option<String>,
+    pub charge: Option<i64>,
+    pub mult: Option<i64>,
+    pub dispersion: Option<String>,
+    pub solvent: Option<String>,
+    pub solvation_model: Option<String>,
+    pub nprocs: Option<i64>,
+    pub mem: Option<i64>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Config {
     pub gedent: GedentConfig,
+    #[serde(default)]
+    pub chemistry: ChemistryConfig,
+    #[serde(default)]
     pub parameters: Map<String, Value>,
 }
 
@@ -38,9 +54,10 @@ impl Config {
         if location {
             println!("Config printed from: {}", Self::get_path()?.display());
         }
-        for (k, v) in self.parameters {
-            println!("{k}: {v}");
-        }
+        print!(
+            "{}",
+            toml::to_string(&self).wrap_err("Failed to serialize config")?
+        );
         Ok(())
     }
 
@@ -134,6 +151,7 @@ impl Config {
             gedent: GedentConfig {
                 default_extension: String::new(),
             },
+            chemistry: ChemistryConfig::default(),
             parameters: Map::new(),
         }
     }
