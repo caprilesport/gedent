@@ -185,7 +185,7 @@ to an xtask crate (or a simple install subcommand backed by xtask). This also
 makes it easier to update defaults without recompiling.
 
 ### 10. Template organization
-**Status:** in progress
+**Status:** done
 Design settled. Implementation items:
 
 **a. `software/jobtype` directory convention**
@@ -212,9 +212,9 @@ skips gracefully. `requires` is used by the validation pipeline (item 17) to
 check for missing variables before rendering.
 
 **c. `software` key in `[gedent]` config**
-Optional. Used as tiebreaker when short-name lookup is ambiguous. Does **not**
-participate in the cascade — it is a project-level declaration, not a key that
-should be inherited and silently applied from a parent directory.
+Optional. Used as tiebreaker when short-name lookup is ambiguous. Cascades
+normally (local overrides parent) — setting it in a subdirectory `gedent.toml`
+naturally scopes the default software for that subtree.
 
 ```toml
 [gedent]
@@ -238,10 +238,12 @@ unambiguous by default; collisions (e.g. `orca/opt` vs `xtb/opt`) are resolved
 by setting `software` in the project or subdirectory `gedent.toml`.
 
 **e. Dynamic shell completion**
-`gedent template list` outputs one short name per line (already does this).
-Generated completion scripts are patched to call `gedent template list` for the
-`template_name` argument in `gedent gen`. A hidden `gedent __complete templates`
-subcommand provides a shell-friendly completion endpoint.
+`gedent __complete templates` is a hidden subcommand that prints one completable
+name per line, respecting the `software` config for tiebreaking. Short names are
+used for unambiguous jobtypes; full `software/jobtype` names for collisions.
+Shell completion scripts should call this endpoint for the `template_name`
+argument of `gedent gen`. `gedent template list` now displays a borderless
+two-column table (name | description) grouped by software using `comfy-table`.
 
 **f. Software database**
 Software-level metadata (default extension, compatible solvation models, etc.)
@@ -418,12 +420,16 @@ template automatically. Quality tiers: `quick` / `production` / `benchmark`.
 ## Quality
 
 ### 21. Tests
-**Status:** inadequate
-Current tests only cover happy paths for individual units. Needed:
-- Error case coverage for the xyz parser (blank lines, malformed atoms, CRLF)
-- Tests for `generate_input`
+**Status:** partial
+Added: config cascade (7 tests), xyz parser (4 tests including error cases),
+`build_context` (6 tests covering overrides, fallthrough, solvent flag),
+`render_with_molecule`, `parse_frontmatter` (2 tests), `missing_vars` (3 tests —
+the core of item 17's pre-render check is already tested).
+
+Still needed:
 - Integration tests (invoke the CLI, check output files)
-- Property-based tests for the parser once the atom struct is in place
+- Property-based tests for the xyz parser
+- Tests for `generate_input` end-to-end
 
 ### 22. Logging
 **Status:** not started
