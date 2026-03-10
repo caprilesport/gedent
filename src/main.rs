@@ -64,9 +64,6 @@ struct Cli {
     /// Check if gedent is set up correctly.
     #[arg(long, default_value = None)]
     health: bool,
-    /// Set up gedent configuration directory.
-    #[arg(long, default_value = None)]
-    set_up: bool,
     /// If provided, outputs the completion file for given shell.
     #[arg(long = "generate", value_enum)]
     generator: Option<Shell>,
@@ -239,12 +236,12 @@ fn main() -> Result<()> {
         print_completions(generator, &mut cmd);
     }
 
-    if cli.health {
-        check_gedent_health()?;
+    if Config::gedent_home().is_err() {
+        setup_gedent()?;
     }
 
-    if cli.set_up {
-        setup_gedent()?;
+    if cli.health {
+        check_gedent_health()?;
     }
 
     if let Some(mode) = cli.mode {
