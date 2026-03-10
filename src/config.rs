@@ -16,7 +16,7 @@ pub struct GedentConfig {
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-pub struct ChemistryConfig {
+pub struct ModelConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub method: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -31,6 +31,10 @@ pub struct ChemistryConfig {
     pub solvent: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub solvation_model: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct ResourcesConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub nprocs: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -41,7 +45,9 @@ pub struct ChemistryConfig {
 pub struct Config {
     pub gedent: GedentConfig,
     #[serde(default)]
-    pub chemistry: ChemistryConfig,
+    pub model: ModelConfig,
+    #[serde(default)]
+    pub resources: ResourcesConfig,
     #[serde(default)]
     pub parameters: Map<String, Value>,
 }
@@ -62,7 +68,9 @@ struct RawConfig {
     #[serde(default)]
     gedent: RawGedentConfig,
     #[serde(default)]
-    chemistry: ChemistryConfig,
+    model: ModelConfig,
+    #[serde(default)]
+    resources: ResourcesConfig,
     #[serde(default)]
     parameters: Map<String, Value>,
 }
@@ -71,19 +79,18 @@ impl RawConfig {
     /// Merge `overlay` on top of `self`. All `Some` values in `overlay` win;
     /// `None` values fall through from `self`.
     fn merge(self, overlay: Self) -> Self {
-        let chem = ChemistryConfig {
-            method: overlay.chemistry.method.or(self.chemistry.method),
-            basis_set: overlay.chemistry.basis_set.or(self.chemistry.basis_set),
-            charge: overlay.chemistry.charge.or(self.chemistry.charge),
-            mult: overlay.chemistry.mult.or(self.chemistry.mult),
-            dispersion: overlay.chemistry.dispersion.or(self.chemistry.dispersion),
-            solvent: overlay.chemistry.solvent.or(self.chemistry.solvent),
-            solvation_model: overlay
-                .chemistry
-                .solvation_model
-                .or(self.chemistry.solvation_model),
-            nprocs: overlay.chemistry.nprocs.or(self.chemistry.nprocs),
-            mem: overlay.chemistry.mem.or(self.chemistry.mem),
+        let model = ModelConfig {
+            method: overlay.model.method.or(self.model.method),
+            basis_set: overlay.model.basis_set.or(self.model.basis_set),
+            charge: overlay.model.charge.or(self.model.charge),
+            mult: overlay.model.mult.or(self.model.mult),
+            dispersion: overlay.model.dispersion.or(self.model.dispersion),
+            solvent: overlay.model.solvent.or(self.model.solvent),
+            solvation_model: overlay.model.solvation_model.or(self.model.solvation_model),
+        };
+        let resources = ResourcesConfig {
+            nprocs: overlay.resources.nprocs.or(self.resources.nprocs),
+            mem: overlay.resources.mem.or(self.resources.mem),
         };
         let mut params = self.parameters;
         for (k, v) in overlay.parameters {
@@ -97,7 +104,8 @@ impl RawConfig {
                     .or(self.gedent.default_extension),
                 software: overlay.gedent.software.or(self.gedent.software),
             },
-            chemistry: chem,
+            model,
+            resources,
             parameters: params,
         }
     }
@@ -112,7 +120,8 @@ impl RawConfig {
                     .unwrap_or_else(|| "inp".to_string()),
                 software: self.gedent.software,
             },
-            chemistry: self.chemistry,
+            model: self.model,
+            resources: self.resources,
             parameters: self.parameters,
         }
     }
@@ -260,11 +269,12 @@ mod tests {
                 default_extension: default_extension.map(str::to_string),
                 software: None,
             },
-            chemistry: ChemistryConfig {
+            model: ModelConfig {
                 method: method.map(str::to_string),
                 charge,
-                ..ChemistryConfig::default()
+                ..ModelConfig::default()
             },
+            resources: ResourcesConfig::default(),
             parameters: params
                 .iter()
                 .map(|(k, v)| ((*k).to_string(), v.clone()))
@@ -277,8 +287,8 @@ mod tests {
         let global = raw(Some("inp"), Some("pbe0"), Some(0), &[]);
         let local = raw(None, None, Some(1), &[]);
         let merged = global.merge(local);
-        assert_eq!(merged.chemistry.method, Some("pbe0".to_string())); // falls through
-        assert_eq!(merged.chemistry.charge, Some(1)); // local wins
+        assert_eq!(merged.model.method, Some("pbe0".to_string())); // falls through
+        assert_eq!(merged.model.charge, Some(1)); // local wins
     }
 
     #[test]
@@ -286,8 +296,8 @@ mod tests {
         let global = raw(Some("inp"), Some("pbe0"), Some(0), &[]);
         let local = raw(None, Some("b3lyp"), None, &[]);
         let merged = global.merge(local);
-        assert_eq!(merged.chemistry.method, Some("b3lyp".to_string())); // local wins
-        assert_eq!(merged.chemistry.charge, Some(0)); // falls through
+        assert_eq!(merged.model.method, Some("b3lyp".to_string())); // local wins
+        assert_eq!(merged.model.charge, Some(0)); // falls through
     }
 
     #[test]
@@ -331,8 +341,8 @@ mod tests {
         );
         let config = r.resolve();
         assert_eq!(config.gedent.default_extension, "com");
-        assert_eq!(config.chemistry.method, Some("pbe0".to_string()));
-        assert_eq!(config.chemistry.charge, Some(-1));
+        assert_eq!(config.model.method, Some("pbe0".to_string()));
+        assert_eq!(config.model.charge, Some(-1));
         assert_eq!(config.parameters["key"], Value::Integer(42));
     }
 
@@ -344,12 +354,13 @@ mod tests {
                 default_extension: Some("inp".to_string()),
                 software: None,
             },
-            chemistry: ChemistryConfig {
+            model: ModelConfig {
                 method: Some("pbe0".to_string()),
                 basis_set: Some("def2-tzvp".to_string()),
                 charge: Some(0),
-                ..ChemistryConfig::default()
+                ..ModelConfig::default()
             },
+            resources: ResourcesConfig::default(),
             parameters: Map::new(),
         };
         // project: charge=1 (overrides global)
@@ -359,8 +370,8 @@ mod tests {
 
         let merged = global.merge(project).merge(cwd);
 
-        assert_eq!(merged.chemistry.method, Some("b3lyp".to_string())); // cwd wins
-        assert_eq!(merged.chemistry.basis_set, Some("def2-tzvp".to_string())); // global falls through
-        assert_eq!(merged.chemistry.charge, Some(1)); // project wins over global
+        assert_eq!(merged.model.method, Some("b3lyp".to_string())); // cwd wins
+        assert_eq!(merged.model.basis_set, Some("def2-tzvp".to_string())); // global falls through
+        assert_eq!(merged.model.charge, Some(1)); // project wins over global
     }
 }

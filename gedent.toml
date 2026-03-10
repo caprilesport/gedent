@@ -1,7 +1,7 @@
 [gedent]
 default_extension = "inp"
 
-[chemistry]
+[model]
 method = "BP86"
 basis_set = "def2svp"
 charge = 0
@@ -9,6 +9,8 @@ mult = 1
 dispersion = "D3"
 solvent = "water"
 solvation_model = "CPCM"
+
+[resources]
 nprocs = 20
 mem = 3000
 

@@ -1,6 +1,6 @@
 #![allow(clippy::multiple_crate_versions)]
 
-use crate::config::{ChemistryConfig, Config};
+use crate::config::{Config, ModelConfig, ResourcesConfig};
 use crate::molecule::Molecule;
 use crate::template::Template;
 use clap::{Command, CommandFactory, Parser, Subcommand};
@@ -337,7 +337,7 @@ fn main() -> Result<()> {
                 mem,
             } => gedent_init(
                 software,
-                ChemistryConfig {
+                ModelConfig {
                     method,
                     basis_set,
                     charge,
@@ -345,9 +345,8 @@ fn main() -> Result<()> {
                     dispersion,
                     solvent,
                     solvation_model,
-                    nprocs,
-                    mem,
                 },
+                ResourcesConfig { nprocs, mem },
             )?,
 
             Mode::Complete {
@@ -443,24 +442,28 @@ fn setup_gedent() -> Result<(), Error> {
     Ok(())
 }
 
-fn gedent_init(software: Option<String>, chemistry: ChemistryConfig) -> Result<(), Error> {
+fn gedent_init(
+    software: Option<String>,
+    model: ModelConfig,
+    resources: ResourcesConfig,
+) -> Result<(), Error> {
     if std::path::Path::try_exists(&PathBuf::from("./gedent.toml"))? {
         bail!("gedent.toml already exists, exiting...");
     }
 
     let no_flags_set = software.is_none()
-        && chemistry.method.is_none()
-        && chemistry.basis_set.is_none()
-        && chemistry.dispersion.is_none()
-        && chemistry.solvent.is_none()
-        && chemistry.solvation_model.is_none()
-        && chemistry.charge.is_none()
-        && chemistry.mult.is_none()
-        && chemistry.nprocs.is_none()
-        && chemistry.mem.is_none();
+        && model.method.is_none()
+        && model.basis_set.is_none()
+        && model.dispersion.is_none()
+        && model.solvent.is_none()
+        && model.solvation_model.is_none()
+        && model.charge.is_none()
+        && model.mult.is_none()
+        && resources.nprocs.is_none()
+        && resources.mem.is_none();
 
     let content = if no_flags_set {
-        "[gedent]\n\n[chemistry]\n\n[parameters]\n".to_string()
+        "[gedent]\n\n[model]\n\n[resources]\n\n[parameters]\n".to_string()
     } else {
         #[derive(serde::Serialize)]
         struct InitGedentConfig {
@@ -471,11 +474,16 @@ fn gedent_init(software: Option<String>, chemistry: ChemistryConfig) -> Result<(
         struct InitConfig {
             #[serde(skip_serializing_if = "Option::is_none")]
             gedent: Option<InitGedentConfig>,
-            chemistry: ChemistryConfig,
+            model: ModelConfig,
+            resources: ResourcesConfig,
         }
         let gedent = software.map(|sw| InitGedentConfig { software: Some(sw) });
-        toml::to_string(&InitConfig { gedent, chemistry })
-            .wrap_err("Failed to serialize init config")?
+        toml::to_string(&InitConfig {
+            gedent,
+            model,
+            resources,
+        })
+        .wrap_err("Failed to serialize init config")?
     };
 
     write("./gedent.toml", content).wrap_err("Failed to write gedent.toml")?;
@@ -483,31 +491,36 @@ fn gedent_init(software: Option<String>, chemistry: ChemistryConfig) -> Result<(
     Ok(())
 }
 
-fn build_context(chemistry: &ChemistryConfig, opts: &GenOptions) -> tera::Context {
+fn build_context(
+    model: &ModelConfig,
+    resources: &ResourcesConfig,
+    opts: &GenOptions,
+) -> tera::Context {
     let mut context = tera::Context::new();
 
-    // Layer 1: chemistry config (base)
-    let chem = chemistry;
-    if let Some(ref v) = chem.solvent {
+    // Layer 1: model config (what the calculation is)
+    if let Some(ref v) = model.solvent {
         context.insert("solvation", &true);
         context.insert("solvent", v);
     }
     for (k, v) in [
-        ("method", chem.method.as_deref()),
-        ("basis_set", chem.basis_set.as_deref()),
-        ("dispersion", chem.dispersion.as_deref()),
-        ("solvation_model", chem.solvation_model.as_deref()),
+        ("method", model.method.as_deref()),
+        ("basis_set", model.basis_set.as_deref()),
+        ("dispersion", model.dispersion.as_deref()),
+        ("solvation_model", model.solvation_model.as_deref()),
     ] {
         if let Some(v) = v {
             context.insert(k, v);
         }
     }
-    for (k, v) in [
-        ("charge", chem.charge),
-        ("mult", chem.mult),
-        ("nprocs", chem.nprocs),
-        ("mem", chem.mem),
-    ] {
+    for (k, v) in [("charge", model.charge), ("mult", model.mult)] {
+        if let Some(v) = v {
+            context.insert(k, &v);
+        }
+    }
+
+    // Layer 2: resources config (what machine it runs on)
+    for (k, v) in [("nprocs", resources.nprocs), ("mem", resources.mem)] {
         if let Some(v) = v {
             context.insert(k, &v);
         }
@@ -561,7 +574,7 @@ fn generate_input(
     debug!("Resolving template {template_name:?} with software hint {software:?}");
     let template = Template::get(template_name, software)?;
 
-    let mut context = build_context(&config.chemistry, opts);
+    let mut context = build_context(&config.model, &config.resources, opts);
     for (key, value) in config.parameters {
         context.insert(key, &value);
     }
@@ -612,15 +625,17 @@ mod tests {
 
     #[test]
     fn build_context_config_values_inserted() {
-        let chemistry = ChemistryConfig {
+        let model = ModelConfig {
             method: Some("pbe0".into()),
             basis_set: Some("def2-tzvp".into()),
             charge: Some(-1),
-            nprocs: Some(8),
-            ..ChemistryConfig::default()
+            ..ModelConfig::default()
         };
-        let opts = GenOptions::default();
-        let ctx = build_context(&chemistry, &opts).into_json();
+        let resources = ResourcesConfig {
+            nprocs: Some(8),
+            ..ResourcesConfig::default()
+        };
+        let ctx = build_context(&model, &resources, &GenOptions::default()).into_json();
         assert_eq!(ctx["method"], "pbe0");
         assert_eq!(ctx["basis_set"], "def2-tzvp");
         assert_eq!(ctx["charge"], -1);
@@ -629,62 +644,68 @@ mod tests {
 
     #[test]
     fn build_context_cli_overrides_config() {
-        let chemistry = ChemistryConfig {
+        let model = ModelConfig {
             method: Some("pbe0".into()),
             charge: Some(0),
-            ..ChemistryConfig::default()
+            ..ModelConfig::default()
         };
         let opts = GenOptions {
             method: Some("b3lyp".into()),
             charge: Some(2),
             ..GenOptions::default()
         };
-        let ctx = build_context(&chemistry, &opts).into_json();
+        let ctx = build_context(&model, &ResourcesConfig::default(), &opts).into_json();
         assert_eq!(ctx["method"], "b3lyp");
         assert_eq!(ctx["charge"], 2);
     }
 
     #[test]
     fn build_context_config_falls_through_when_no_cli_override() {
-        let chemistry = ChemistryConfig {
+        let model = ModelConfig {
             method: Some("pbe0".into()),
-            ..ChemistryConfig::default()
+            ..ModelConfig::default()
         };
         let opts = GenOptions {
             basis_set: Some("def2-tzvp".into()),
             ..GenOptions::default()
         };
-        let ctx = build_context(&chemistry, &opts).into_json();
+        let ctx = build_context(&model, &ResourcesConfig::default(), &opts).into_json();
         assert_eq!(ctx["method"], "pbe0");
         assert_eq!(ctx["basis_set"], "def2-tzvp");
     }
 
     #[test]
     fn build_context_solvent_sets_solvation_flag() {
-        let chemistry = ChemistryConfig {
+        let model = ModelConfig {
             solvent: Some("water".into()),
-            ..ChemistryConfig::default()
+            ..ModelConfig::default()
         };
-        let ctx = build_context(&chemistry, &GenOptions::default()).into_json();
+        let ctx =
+            build_context(&model, &ResourcesConfig::default(), &GenOptions::default()).into_json();
         assert_eq!(ctx["solvation"], true);
         assert_eq!(ctx["solvent"], "water");
     }
 
     #[test]
     fn build_context_cli_solvent_overrides_config() {
-        let chemistry = ChemistryConfig::default();
         let opts = GenOptions {
             solvent: Some(Some("thf".into())),
             ..GenOptions::default()
         };
-        let ctx = build_context(&chemistry, &opts).into_json();
+        let ctx =
+            build_context(&ModelConfig::default(), &ResourcesConfig::default(), &opts).into_json();
         assert_eq!(ctx["solvation"], true);
         assert_eq!(ctx["solvent"], "thf");
     }
 
     #[test]
     fn build_context_absent_fields_not_inserted() {
-        let ctx = build_context(&ChemistryConfig::default(), &GenOptions::default()).into_json();
+        let ctx = build_context(
+            &ModelConfig::default(),
+            &ResourcesConfig::default(),
+            &GenOptions::default(),
+        )
+        .into_json();
         assert!(ctx.get("method").is_none());
         assert!(ctx.get("charge").is_none());
         assert!(ctx.get("solvation").is_none());
