@@ -1,7 +1,6 @@
 use crate::config::get_gedent_home;
 use crate::Molecule;
 use color_eyre::eyre::{bail, Report as Error, Result, WrapErr};
-use serde::Deserialize;
 use serde_json::value::{from_value, to_value, Value};
 use std::collections::HashMap;
 use std::fs::{copy, read_to_string};
@@ -15,18 +14,7 @@ const TEMPLATES_DIR: &str = "templates";
 #[derive(Clone, Debug)]
 pub struct Template {
     pub name: String,
-    #[allow(clippy::struct_field_names)]
     body: String,
-    pub options: TemplateOptions,
-}
-
-// this can be expanded in the future, i dont know if there will be more useful stuff
-// that could be in a metada section for the input. i though requiring different molecules
-// could be nice, but thats quite a boring implementation for now, in the future i might come back
-#[derive(Clone, Debug, Default, Deserialize)]
-pub struct TemplateOptions {
-    // required_files: Option<i64>,
-    pub extension: Option<String>,
 }
 
 impl Template {
@@ -70,13 +58,12 @@ impl Template {
     }
 
     pub fn get(template_name: String) -> Result<Self, Error> {
-        let (parsed, opts) = Self::parse(&read_to_string(Self::find_path(&template_name)?)?)?;
-        let template = Self {
+        let body = read_to_string(Self::find_path(&template_name)?)
+            .wrap_err(format!("Can't read template {template_name}"))?;
+        Ok(Self {
             name: template_name,
-            body: parsed,
-            options: opts,
-        };
-        Ok(template)
+            body,
+        })
     }
 
     pub fn print_template(template: &str) -> Result<(), Error> {
@@ -105,38 +92,6 @@ impl Template {
         Ok(())
     }
 
-    fn parse(raw_template: &str) -> Result<(String, TemplateOptions), Error> {
-        let mut lines = raw_template.lines().peekable();
-        let mut header_lines: Vec<&str> = Vec::new();
-        let mut template_lines: Vec<&str> = Vec::new();
-
-        while let Some(next) = lines.next() {
-            if next.contains("--@") {
-                loop {
-                    match lines.peek() {
-                        None => bail!("Unclosed template header: missing closing '--@'"),
-                        Some(line) if line.contains("--@") => {
-                            let _ = lines.next();
-                            break;
-                        }
-                        Some(_) => {
-                            header_lines.push(lines.next().unwrap());
-                        }
-                    }
-                }
-            } else {
-                template_lines.push(next);
-            }
-        }
-
-        let header = header_lines.join("\n");
-        let template = template_lines.join("\n");
-
-        let template_opts: TemplateOptions =
-            toml::from_str(&header).wrap_err("Failed to parse template header")?;
-        Ok((template, template_opts))
-    }
-
     fn find_path(template: &str) -> Result<PathBuf, Error> {
         let template_path: PathBuf = [
             get_gedent_home()?,
@@ -157,10 +112,6 @@ impl Template {
         Self {
             name: String::new(),
             body: String::new(),
-            options: TemplateOptions {
-                extension: None,
-                // required_files: None,
-            },
         }
     }
 }
@@ -234,52 +185,6 @@ end
         match template.render(&context) {
             Ok(result) => assert_eq!(result, rendered_template),
             Err(err) => core::panic!("Failed to render template, caused by {}", err),
-        }
-    }
-
-    #[test]
-    fn parse_template_works() {
-        let mut template = Template::new();
-        template.body = "--@
-extension = \"inp\"
---@
-! {{ dft_level }} {{ dft_basis_set }}
-
-nprocs {{ nprocs }}
-end
-
-{% if solvation -%}
-end
-
-{% endif -%}"
-            .to_string();
-
-        let test_parsed_template = "! {{ dft_level }} {{ dft_basis_set }}
-
-nprocs {{ nprocs }}
-end
-
-{% if solvation -%}
-end
-
-{% endif -%}"
-            .to_string();
-
-        match Template::parse(&template.body) {
-            Ok((template, opts)) => {
-                assert_eq!(template, test_parsed_template);
-                assert_eq!(opts.extension, Some("inp".to_string()))
-            }
-            Err(_) => core::panic!("Error parsing template!"),
-        }
-
-        // when there is no header opts.extension shoud be none
-        match Template::parse(&test_parsed_template) {
-            Ok((template, opts)) => {
-                assert_eq!(template, test_parsed_template);
-                assert_eq!(opts.extension, None)
-            }
-            Err(_) => core::panic!("Error parsing template!"),
         }
     }
 }

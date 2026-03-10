@@ -24,6 +24,7 @@ static GEDENT_CONFIG: &str = include_str!("../gedent.toml");
 
 #[derive(Debug, Default)]
 struct GenOptions {
+    ext: Option<String>,
     method: Option<String>,
     basis_set: Option<String>,
     dispersion: Option<String>,
@@ -71,6 +72,7 @@ struct Cli {
 }
 
 #[derive(Debug, Subcommand)]
+#[allow(clippy::large_enum_variant)]
 enum Mode {
     /// Generate a new input based on a template
     Gen {
@@ -82,6 +84,9 @@ enum Mode {
         /// Print to screen and don't save file
         #[arg(short, long, default_value_t = false)]
         print: bool,
+        /// Override output file extension
+        #[arg(long, default_value = None)]
+        ext: Option<String>,
         /// Set method
         #[arg(long, default_value = None)]
         method: Option<String>,
@@ -213,6 +218,7 @@ fn main() -> Result<()> {
                 template_name,
                 xyz_files,
                 print,
+                ext,
                 method,
                 basis_set,
                 dispersion,
@@ -232,6 +238,7 @@ fn main() -> Result<()> {
                 }
                 let template = Template::get(template_name)?;
                 let opts = GenOptions {
+                    ext,
                     method,
                     basis_set,
                     dispersion,
@@ -441,10 +448,10 @@ fn generate_input(
         }
     }
 
-    let extension = match &template.options.extension {
-        Some(ext) => ext,
-        None => &config.gedent.default_extension,
-    };
+    let extension = opts
+        .ext
+        .as_ref()
+        .unwrap_or(&config.gedent.default_extension);
 
     let mut results: Vec<Input> = vec![];
 

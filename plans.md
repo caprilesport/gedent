@@ -52,7 +52,7 @@ Do this before the validation pipeline so warnings and diagnostics can use
 `.suggestion()` from the start.
 
 ### 6. Remove the template header (`--@...--@`)
-**Status:** not started
+**Status:** done
 The bespoke TOML-in-comment header format is hard to document, non-standard, and
 the only thing it carries right now is `extension`. Replace with an `--ext` CLI
 flag. Per-software extension defaults can live in a config section or a software
@@ -64,7 +64,7 @@ Too niche and premature given the current state of the codebase. Remove now,
 revisit after the domain model is solid.
 
 ### 8. Remove `dialoguer` and make all CLI arguments required
-**Status:** not started
+**Status:** done
 Interactive fuzzy-select fallbacks (for template name, software, config key) are
 band-aid UX over missing required arguments. Remove `dialoguer` entirely and make
 the affected arguments non-optional. Cleaner API surface, fully scriptable, no
