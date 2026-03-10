@@ -16,6 +16,7 @@ pub struct GedentConfig {
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ModelConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub method: Option<String>,
@@ -34,6 +35,7 @@ pub struct ModelConfig {
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ResourcesConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub nprocs: Option<i64>,
@@ -56,6 +58,7 @@ pub struct Config {
 
 /// All-optional version of `GedentConfig` used during cascade parsing.
 #[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct RawGedentConfig {
     default_extension: Option<String>,
     software: Option<String>,
@@ -64,6 +67,7 @@ struct RawGedentConfig {
 /// All-optional config used to parse individual files in the cascade chain.
 /// Each file in the chain may omit any section.
 #[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct RawConfig {
     #[serde(default)]
     gedent: RawGedentConfig,

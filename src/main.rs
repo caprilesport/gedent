@@ -4,13 +4,12 @@ use crate::config::{Config, ModelConfig, ResourcesConfig};
 use crate::molecule::Molecule;
 use crate::template::Template;
 use clap::{Command, CommandFactory, Parser, Subcommand};
-use clap_complete::{generate, Generator, Shell};
+use clap_complete::{generate, Shell};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use color_eyre::eyre::{bail, eyre, Report as Error, Result, WrapErr};
 use include_dir::{include_dir, Dir};
 use log::{debug, info};
 use std::fs::{read_dir, write};
-use std::io;
 use std::path::PathBuf;
 
 mod config;
@@ -137,8 +136,8 @@ enum Mode {
         template_subcommand: TemplateSubcommand,
     },
     /// Shell completion endpoint — hidden from normal help output.
-    /// `gedent __complete templates` prints one completable name per line.
-    #[command(hide = true)]
+    /// `gedent _complete templates` prints one completable name per line.
+    #[command(hide = true, name = "_complete")]
     Complete {
         #[command(subcommand)]
         complete_subcommand: CompleteSubcommand,
@@ -351,8 +350,97 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn print_completions<G: Generator>(gen: G, cmd: &mut Command) {
-    generate(gen, cmd, cmd.get_name().to_string(), &mut io::stdout());
+fn print_completions(gen: Shell, cmd: &mut Command) {
+    let mut buf: Vec<u8> = Vec::new();
+    generate(gen, cmd, cmd.get_name().to_string(), &mut buf);
+    let script = String::from_utf8(buf).unwrap_or_default();
+    print!("{}", patch_completions(gen, script));
+}
+
+fn patch_completions(shell: Shell, script: String) -> String {
+    match shell {
+        Shell::Zsh => patch_zsh(script),
+        Shell::Bash => patch_bash(script),
+        Shell::Fish => patch_fish(script),
+        _ => script,
+    }
+}
+
+fn patch_zsh(mut script: String) -> String {
+    // Wire template_name completion for `gen` and `template print/edit`
+    script = script.replace(
+        "':template_name -- The template to look for in ~/.config/gedent/templates:_default'",
+        "':template_name -- The template to look for in ~/.config/gedent/templates:_gedent_template_names'",
+    );
+    script = script.replace("':template:_default'", "':template:_gedent_template_names'");
+    script.push_str(
+        r#"
+_gedent_template_names() {
+    local -a templates
+    templates=("${(@f)$(gedent _complete templates 2>/dev/null)}")
+    _describe 'template' templates
+}
+"#,
+    );
+    script
+}
+
+fn patch_fish(mut script: String) -> String {
+    script.push_str(
+        r#"
+# Dynamic template name completions
+complete -c gedent -n "__fish_gedent_using_subcommand gen; and test (count (commandline -opc)) -le 2" -f -a "(gedent _complete templates 2>/dev/null)"
+complete -c gedent -n "__fish_gedent_using_subcommand template; and __fish_seen_subcommand_from print" -f -a "(gedent _complete templates 2>/dev/null)"
+complete -c gedent -n "__fish_gedent_using_subcommand template; and __fish_seen_subcommand_from edit" -f -a "(gedent _complete templates 2>/dev/null)"
+"#,
+    );
+    script
+}
+
+fn patch_bash(mut script: String) -> String {
+    // `gen`: template_name is the first positional (COMP_CWORD 2)
+    script = script.replace(
+        r#"            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --ext)"#,
+        r#"            if [[ ${cur} == -* ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            if [[ ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "$(gedent _complete templates 2>/dev/null)" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --ext)"#,
+    );
+    // `template print` and `template edit`: template is the first positional (COMP_CWORD 3)
+    script = script.replace(
+        r#"            opts="-v -q -h -V --verbose --quiet --help --version <TEMPLATE>"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()"#,
+        r#"            opts="-v -q -h -V --verbose --quiet --help --version <TEMPLATE>"
+            if [[ ${cur} == -* ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            if [[ ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "$(gedent _complete templates 2>/dev/null)" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()"#,
+    );
+    script
 }
 
 fn check_gedent_health() -> Result<(), Error> {
