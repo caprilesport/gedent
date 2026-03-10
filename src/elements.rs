@@ -284,7 +284,7 @@ impl<'de> serde::Deserialize<'de> for Element {
 impl Element {
     /// Try to create an [`Element`] from its atomic number.
     ///
-    /// This is the same as [`Element::from_repr`], except that this function
+    /// This is the same as [`Self::from_repr`], except that this function
     /// will never return a dummy element (see examples below).
     ///
     /// # Examples
@@ -319,15 +319,15 @@ impl Element {
     ///
     /// For carbon, manganese, iron and cobalt, values are averaged out from
     /// different hybridisations and/or spin states.
-    #[allow(clippy::too_many_lines, clippy::use_self)]
+    #[allow(clippy::too_many_lines)]
     pub fn get_radius(self) -> Option<f32> {
         match self {
-            Element::H => Some(0.31),
-            Element::He => Some(0.28),
-            Element::Li => Some(1.28),
-            Element::Be => Some(0.96),
-            Element::B => Some(0.84),
-            Element::C => {
+            Self::H => Some(0.31),
+            Self::He => Some(0.28),
+            Self::Li => Some(1.28),
+            Self::Be => Some(0.96),
+            Self::B => Some(0.84),
+            Self::C => {
                 let (sp3, n_sp3) = (0.76, 10000_f64);
                 let (sp2, n_sp2) = (0.73, 10000_f64);
                 let (sp, n_sp) = (0.69, 171_f64);
@@ -337,25 +337,25 @@ impl Element {
                         .mean() as f32,
                 )
             }
-            Element::N => Some(0.71),
-            Element::O => Some(0.66),
-            Element::F => Some(0.57),
-            Element::Ne => Some(0.58),
-            Element::Na => Some(1.66),
-            Element::Mg | Element::Ir => Some(1.41),
-            Element::Al => Some(1.21),
-            Element::Si => Some(1.11),
-            Element::P => Some(1.07),
-            Element::S => Some(1.05),
-            Element::Cl => Some(1.02),
-            Element::Ar => Some(1.06),
-            Element::K | Element::Pr => Some(2.03),
-            Element::Ca => Some(1.76),
-            Element::Sc | Element::Ta => Some(1.70),
-            Element::Ti => Some(1.60),
-            Element::V => Some(1.53),
-            Element::Cr | Element::Pd | Element::Sn | Element::Sb | Element::I => Some(1.39),
-            Element::Mn => {
+            Self::N => Some(0.71),
+            Self::O => Some(0.66),
+            Self::F => Some(0.57),
+            Self::Ne => Some(0.58),
+            Self::Na => Some(1.66),
+            Self::Mg | Self::Ir => Some(1.41),
+            Self::Al => Some(1.21),
+            Self::Si => Some(1.11),
+            Self::P => Some(1.07),
+            Self::S => Some(1.05),
+            Self::Cl => Some(1.02),
+            Self::Ar => Some(1.06),
+            Self::K | Self::Pr => Some(2.03),
+            Self::Ca => Some(1.76),
+            Self::Sc | Self::Ta => Some(1.70),
+            Self::Ti => Some(1.60),
+            Self::V => Some(1.53),
+            Self::Cr | Self::Pd | Self::Sn | Self::Sb | Self::I => Some(1.39),
+            Self::Mn => {
                 let (lowspin, n_lowspin) = (1.39, 321_f64);
                 let (highspin, n_highspin) = (1.61, 929_f64);
                 #[allow(clippy::cast_possible_truncation)]
@@ -364,7 +364,7 @@ impl Element {
                         .mean() as f32,
                 )
             }
-            Element::Fe => {
+            Self::Fe => {
                 let (lowspin, n_lowspin) = (1.32, 336_f64);
                 let (highspin, n_highspin) = (1.52, 1540_f64);
                 #[allow(clippy::cast_possible_truncation)]
@@ -373,7 +373,7 @@ impl Element {
                         .mean() as f32,
                 )
             }
-            Element::Co => {
+            Self::Co => {
                 let (lowspin, n_lowspin) = (1.26, 5733_f64);
                 let (highspin, n_highspin) = (1.50, 780_f64);
                 #[allow(clippy::cast_possible_truncation)]
@@ -382,48 +382,48 @@ impl Element {
                         .mean() as f32,
                 )
             }
-            Element::Ni => Some(1.24),
-            Element::Cu | Element::Hg => Some(1.32),
-            Element::Zn | Element::Ga => Some(1.22),
-            Element::Ge | Element::Se | Element::Br => Some(1.20),
-            Element::As => Some(1.19),
-            Element::Kr => Some(1.16),
-            Element::Rb => Some(2.20),
-            Element::Sr => Some(1.95),
-            Element::Y | Element::Tm | Element::Np => Some(1.90),
-            Element::Zr | Element::Hf => Some(1.75),
-            Element::Nb => Some(1.64),
-            Element::Mo => Some(1.54),
-            Element::Tc => Some(1.47),
-            Element::Ru | Element::Pb => Some(1.46),
-            Element::Rh | Element::In => Some(1.42),
-            Element::Ag | Element::Tl => Some(1.45),
-            Element::Cd | Element::Os => Some(1.44),
-            Element::Te => Some(1.38),
-            Element::Xe | Element::Po => Some(1.40),
-            Element::Cs => Some(2.44),
-            Element::Ba | Element::Ac => Some(2.15),
-            Element::La => Some(2.07),
-            Element::Ce => Some(2.04),
-            Element::Nd => Some(2.01),
-            Element::Pm => Some(1.99),
-            Element::Sm | Element::Eu => Some(1.98),
-            Element::Gd | Element::U => Some(1.96),
-            Element::Tb => Some(1.94),
-            Element::Dy | Element::Ho => Some(1.92),
-            Element::Er => Some(1.89),
-            Element::Yb | Element::Lu | Element::Pu => Some(1.87),
-            Element::W => Some(1.62),
-            Element::Re => Some(1.51),
-            Element::Pt | Element::Au => Some(1.36),
-            Element::Bi => Some(1.48),
-            Element::At | Element::Rn => Some(1.50),
-            Element::Fr => Some(2.60),
-            Element::Ra => Some(2.21),
-            Element::Th => Some(2.06),
-            Element::Pa => Some(2.00),
-            Element::Am => Some(1.80),
-            Element::Cm => Some(1.69),
+            Self::Ni => Some(1.24),
+            Self::Cu | Self::Hg => Some(1.32),
+            Self::Zn | Self::Ga => Some(1.22),
+            Self::Ge | Self::Se | Self::Br => Some(1.20),
+            Self::As => Some(1.19),
+            Self::Kr => Some(1.16),
+            Self::Rb => Some(2.20),
+            Self::Sr => Some(1.95),
+            Self::Y | Self::Tm | Self::Np => Some(1.90),
+            Self::Zr | Self::Hf => Some(1.75),
+            Self::Nb => Some(1.64),
+            Self::Mo => Some(1.54),
+            Self::Tc => Some(1.47),
+            Self::Ru | Self::Pb => Some(1.46),
+            Self::Rh | Self::In => Some(1.42),
+            Self::Ag | Self::Tl => Some(1.45),
+            Self::Cd | Self::Os => Some(1.44),
+            Self::Te => Some(1.38),
+            Self::Xe | Self::Po => Some(1.40),
+            Self::Cs => Some(2.44),
+            Self::Ba | Self::Ac => Some(2.15),
+            Self::La => Some(2.07),
+            Self::Ce => Some(2.04),
+            Self::Nd => Some(2.01),
+            Self::Pm => Some(1.99),
+            Self::Sm | Self::Eu => Some(1.98),
+            Self::Gd | Self::U => Some(1.96),
+            Self::Tb => Some(1.94),
+            Self::Dy | Self::Ho => Some(1.92),
+            Self::Er => Some(1.89),
+            Self::Yb | Self::Lu | Self::Pu => Some(1.87),
+            Self::W => Some(1.62),
+            Self::Re => Some(1.51),
+            Self::Pt | Self::Au => Some(1.36),
+            Self::Bi => Some(1.48),
+            Self::At | Self::Rn => Some(1.50),
+            Self::Fr => Some(2.60),
+            Self::Ra => Some(2.21),
+            Self::Th => Some(2.06),
+            Self::Pa => Some(2.00),
+            Self::Am => Some(1.80),
+            Self::Cm => Some(1.69),
             _ => None,
         }
     }
