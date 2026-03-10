@@ -63,14 +63,21 @@ enum later.
 Too niche and premature given the current state of the codebase. Remove now,
 revisit after the domain model is solid.
 
-### 8. Replace `include_dir!` setup with xtask
+### 8. Remove `dialoguer` and make all CLI arguments required
+**Status:** not started
+Interactive fuzzy-select fallbacks (for template name, software, config key) are
+band-aid UX over missing required arguments. Remove `dialoguer` entirely and make
+the affected arguments non-optional. Cleaner API surface, fully scriptable, no
+hidden TTY dependency.
+
+### 9. Replace `include_dir!` setup with xtask
 **Status:** not started
 Embedding presets/templates/config at compile time via `include_dir!`/`include_str!`
 is the wrong layer for what is essentially a runtime installation step. Move setup
 to an xtask crate (or a simple install subcommand backed by xtask). This also
 makes it easier to update defaults without recompiling.
 
-### 9. Template organization
+### 10. Template organization
 **Status:** no solution yet
 A flat directory that the user must know the path of is bad UX. Options include
 organizing by software, by calculation type, or adding lightweight metadata.
@@ -80,7 +87,7 @@ Revisit once the domain model and template format are stable.
 
 ## Features
 
-### 10. Multi-format molecule input
+### 11. Multi-format molecule input
 **Status:** not started
 The `BufRead`-based parsing interface makes adding new formats straightforward —
 each is just a new `from_<format>(reader: impl BufRead)` function returning
@@ -96,7 +103,7 @@ Note: `Molecule.description` is xyz-specific. As more formats are added, conside
 replacing it with `metadata: HashMap<String, String>` populated by each parser,
 or dropping it entirely since it rarely contains anything useful.
 
-### 11. Basic Tera template functions
+### 12. Basic Tera template functions
 **Status:** not started
 Depends on item 1 (real `Atom` type). Useful functions:
 - `natoms(molecule)` — total atom count
@@ -108,7 +115,7 @@ Depends on item 1 (real `Atom` type). Useful functions:
 - `nuclear_repulsion(molecule)` — occasionally required in input files as a
   reference energy
 
-### 12. Geometric measurements in templates
+### 13. Geometric measurements in templates
 **Status:** not started
 Depends on item 1. Expose as Tera functions so templates can embed computed
 geometry directly in input files:
@@ -118,16 +125,16 @@ geometry directly in input files:
 Useful for constrained optimizations, scan inputs, and anything that needs
 explicit internal coordinates.
 
-### 13. Molecule connectivity graph
+### 14. Molecule connectivity graph
 **Status:** not started
 Depends on item 1. Build a bond graph from covalent radii + distance threshold
 (petgraph is the natural crate). From this, several things become possible:
 - Fragment detection (connected components) — automatically identify how many
   independent fragments are in the file
 - Automatic charge/mult splitting for counterpoise or interaction energy inputs
-- Foundation for atom selection (item 13)
+- Foundation for atom selection (item 15)
 
-### 14. Atom selection
+### 15. Atom selection
 **Status:** not started
 Depends on item 11. A way to select subsets of atoms for use in templates.
 Primary use case: hybrid hessian and TS calculations where you need a specific
@@ -141,7 +148,7 @@ functions:
   pairs naturally with `select_within` for writing active-region blocks
 Selections produce atom index lists that other template functions can consume.
 
-### 15. Multi-role molecule inputs (NEB and similar)
+### 16. Multi-role molecule inputs (NEB and similar)
 **Status:** not started
 Distinct from the removed trajectory support. Some calculations require multiple
 named xyz files with semantic roles: `--reactant mol_r.xyz --product mol_p.xyz`,
@@ -149,7 +156,7 @@ optionally `--ts mol_ts.xyz`. The Tera context would expose named molecules
 (`Reactant`, `Product`, `TS`) rather than a flat list. Needed for NEB, IRC
 endpoint verification, and linear transit inputs.
 
-### 16. Pre-generation validation pipeline
+### 17. Pre-generation validation pipeline
 **Status:** not started
 Rather than scattering ad-hoc `bail!` / `println!` calls, introduce a formal
 validation layer: `Diagnostic { severity: Error | Warning, message }` returned
@@ -173,7 +180,7 @@ Checks to implement in this pipeline:
   template are present in context before rendering, and report a clear list of
   what is undefined rather than a cryptic Tera error.
 
-### 17. `--dry-run` flag and context introspection
+### 18. `--dry-run` flag and context introspection
 **Status:** not started
 - `--dry-run` — run the full validation pipeline and print what would be generated
   without writing any files. Useful for debugging templates.
@@ -181,7 +188,7 @@ Checks to implement in this pipeline:
   context so template authors can see exactly what variables are available and
   their types without guessing.
 
-### 18. Method abstraction and compatibility database
+### 19. Method abstraction and compatibility database
 **Status:** not started / design phase
 Some methods are composite and have baked-in components (pbeh-3c, r2scan-3c,
 HF-3c carry their own basis and dispersion; XTB has no basis set concept at all).
@@ -227,7 +234,7 @@ This item is closely related to the workflow layer (item 18) — once method
 metadata exists, workflows can use it to pre-validate and auto-configure
 calculations rather than relying purely on user-provided variables.
 
-### 19. Workflow layer
+### 20. Workflow layer
 **Status:** not started
 Depends on items 10–17 being reasonably solid. An opinionated layer on top of
 templates for common multi-step sequences (e.g. `--workflow opt-sp` runs geometry
@@ -238,7 +245,7 @@ template automatically. Quality tiers: `quick` / `production` / `benchmark`.
 
 ## Quality
 
-### 20. Tests
+### 21. Tests
 **Status:** inadequate
 Current tests only cover happy paths for individual units. Needed:
 - Error case coverage for the xyz parser (blank lines, malformed atoms, CRLF)
@@ -246,14 +253,10 @@ Current tests only cover happy paths for individual units. Needed:
 - Integration tests (invoke the CLI, check output files)
 - Property-based tests for the parser once the atom struct is in place
 
-### 21. Documentation
+### 22. Documentation
 **Status:** inadequate
 - Add rustdoc to all public types and functions
 - Expand the README with real usage examples and template authoring guide
 - Document the config file format and lookup behaviour
 - Document available Tera functions and their signatures
 
-### 22. Non-interactive fallback for fuzzy selectors
-**Status:** not started
-`dialoguer` fuzzy select has no fallback when stdin is not a TTY, making
-scripting and testing harder than it should be.

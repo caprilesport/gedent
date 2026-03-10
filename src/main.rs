@@ -1,12 +1,11 @@
 #![allow(clippy::multiple_crate_versions)]
 
-use crate::config::{get_gedent_home, select_key, Config};
+use crate::config::{get_gedent_home, Config};
 use crate::molecule::Molecule;
-use crate::template::{select_software, select_template, Template};
+use crate::template::Template;
 use clap::{Command, CommandFactory, Parser, Subcommand};
 use clap_complete::{generate, Generator, Shell};
 use color_eyre::eyre::{bail, eyre, Report as Error, Result, WrapErr};
-use dialoguer::theme::ColorfulTheme;
 use include_dir::{include_dir, Dir};
 use std::fs::{copy, read_dir, write};
 use std::io;
@@ -138,18 +137,11 @@ enum Mode {
 #[derive(Debug, Subcommand)]
 enum TemplateSubcommand {
     /// Prints the unformatted template to stdout
-    Print {
-        // name of template to search for
-        template: Option<String>,
-    },
+    Print { template: String },
     /// Create a new template from a preset located in ~/.config/gedent/presets
     New {
-        // Here there will ne an enum which will hold all basic boilerplate
-        // templates for a simple singlepoint in the following softwares:
-        // ADF, GAMESSUS, GAMESSUK, Gaussian, MOLPRO, NWChem, ORCA
-        // also, template will be added in .gedent folder
         template_name: String,
-        software: Option<String>,
+        software: String,
     },
     /// List available templates
     List {
@@ -159,10 +151,7 @@ enum TemplateSubcommand {
         // $XDG_CONFIG
     },
     /// Edit a given template
-    Edit {
-        // opens a given template in $EDITOR
-        template: Option<String>,
-    },
+    Edit { template: String },
 }
 
 #[derive(Debug, Subcommand)]
@@ -175,10 +164,10 @@ enum ConfigSubcommand {
     },
     /// Sets key to value in the config file, keeps the same type as was setted.
     Set {
-        /// Key to be added
-        key: Option<String>,
-        /// Value associated with key
-        value: Option<String>,
+        /// Key to set
+        key: String,
+        /// Value to assign
+        value: String,
     },
     /// Adds a key, value to the config file, for typed values use an option
     Add {
@@ -193,7 +182,7 @@ enum ConfigSubcommand {
     /// Deletes a certain key in the configuration
     Del {
         /// Key to be deleted.
-        key: Option<String>,
+        key: String,
     },
     /// Opens the currently used config file in your default editor.
     Edit {},
@@ -271,16 +260,6 @@ fn main() -> Result<()> {
                 }
                 ConfigSubcommand::Set { key, value } => {
                     let mut config = Config::get()?;
-                    let key = match key {
-                        Some(key) => key,
-                        None => select_key(&config)?,
-                    };
-                    let value = value.unwrap_or_else(|| {
-                        dialoguer::Input::with_theme(&ColorfulTheme::default())
-                            .with_prompt(format!("Set {key} to:"))
-                            .interact_text()
-                            .unwrap()
-                    });
                     config.set(&key, value)?;
                     config.write()?;
                 }
@@ -295,10 +274,6 @@ fn main() -> Result<()> {
                 }
                 ConfigSubcommand::Del { key } => {
                     let mut config = Config::get()?;
-                    let key = match key {
-                        Some(key) => key,
-                        None => select_key(&config)?,
-                    };
                     config.delete(&key)?;
                     config.write()?;
                 }
@@ -309,28 +284,16 @@ fn main() -> Result<()> {
                 template_subcommand,
             } => match template_subcommand {
                 TemplateSubcommand::Print { template } => {
-                    let template = match template {
-                        Some(templ) => templ,
-                        None => select_template()?,
-                    };
                     Template::print_template(&template)?;
                 }
                 TemplateSubcommand::New {
                     software,
                     template_name,
                 } => {
-                    let software = match software {
-                        Some(software) => software,
-                        None => select_software()?,
-                    };
                     Template::from_preset(software, template_name)?;
                 }
                 TemplateSubcommand::List {} => Template::list_templates()?,
                 TemplateSubcommand::Edit { template } => {
-                    let template = match template {
-                        Some(template) => template,
-                        None => select_template()?,
-                    };
                     Template::edit_template(&template)?;
                 }
             },

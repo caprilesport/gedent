@@ -1,6 +1,5 @@
 use clap::ValueEnum;
 use color_eyre::eyre::{bail, eyre, Report as Error, Result, WrapErr};
-use dialoguer::{theme::ColorfulTheme, FuzzySelect};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use toml::{map::Map, Value};
@@ -153,19 +152,6 @@ pub fn get_gedent_home() -> Result<PathBuf, Error> {
         Err(err) => bail!("Failed to retrieve gedent home, caused by {:?}", err),
     }
     Ok(config_dir)
-}
-
-pub fn select_key(config: &Config) -> Result<String, Error> {
-    let keys: Vec<&String> = config.parameters.keys().collect();
-    let mut select = vec![];
-    for (k, v) in &config.parameters {
-        select.push(format!("{k} (current value: {v})"));
-    }
-    let selection = FuzzySelect::with_theme(&ColorfulTheme::default())
-        .default(0)
-        .items(&select[..])
-        .interact()?;
-    Ok(keys[selection].clone())
 }
 
 #[cfg(test)]
