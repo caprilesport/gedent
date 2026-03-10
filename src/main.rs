@@ -576,4 +576,84 @@ mod tests {
 
         Cli::command().debug_assert();
     }
+
+    #[test]
+    fn build_context_config_values_inserted() {
+        let chemistry = ChemistryConfig {
+            method: Some("pbe0".into()),
+            basis_set: Some("def2-tzvp".into()),
+            charge: Some(-1),
+            nprocs: Some(8),
+            ..ChemistryConfig::default()
+        };
+        let opts = GenOptions::default();
+        let ctx = build_context(&chemistry, &opts).into_json();
+        assert_eq!(ctx["method"], "pbe0");
+        assert_eq!(ctx["basis_set"], "def2-tzvp");
+        assert_eq!(ctx["charge"], -1);
+        assert_eq!(ctx["nprocs"], 8);
+    }
+
+    #[test]
+    fn build_context_cli_overrides_config() {
+        let chemistry = ChemistryConfig {
+            method: Some("pbe0".into()),
+            charge: Some(0),
+            ..ChemistryConfig::default()
+        };
+        let opts = GenOptions {
+            method: Some("b3lyp".into()),
+            charge: Some(2),
+            ..GenOptions::default()
+        };
+        let ctx = build_context(&chemistry, &opts).into_json();
+        assert_eq!(ctx["method"], "b3lyp");
+        assert_eq!(ctx["charge"], 2);
+    }
+
+    #[test]
+    fn build_context_config_falls_through_when_no_cli_override() {
+        let chemistry = ChemistryConfig {
+            method: Some("pbe0".into()),
+            ..ChemistryConfig::default()
+        };
+        let opts = GenOptions {
+            basis_set: Some("def2-tzvp".into()),
+            ..GenOptions::default()
+        };
+        let ctx = build_context(&chemistry, &opts).into_json();
+        assert_eq!(ctx["method"], "pbe0");
+        assert_eq!(ctx["basis_set"], "def2-tzvp");
+    }
+
+    #[test]
+    fn build_context_solvent_sets_solvation_flag() {
+        let chemistry = ChemistryConfig {
+            solvent: Some("water".into()),
+            ..ChemistryConfig::default()
+        };
+        let ctx = build_context(&chemistry, &GenOptions::default()).into_json();
+        assert_eq!(ctx["solvation"], true);
+        assert_eq!(ctx["solvent"], "water");
+    }
+
+    #[test]
+    fn build_context_cli_solvent_overrides_config() {
+        let chemistry = ChemistryConfig::default();
+        let opts = GenOptions {
+            solvent: Some(Some("thf".into())),
+            ..GenOptions::default()
+        };
+        let ctx = build_context(&chemistry, &opts).into_json();
+        assert_eq!(ctx["solvation"], true);
+        assert_eq!(ctx["solvent"], "thf");
+    }
+
+    #[test]
+    fn build_context_absent_fields_not_inserted() {
+        let ctx = build_context(&ChemistryConfig::default(), &GenOptions::default()).into_json();
+        assert!(ctx.get("method").is_none());
+        assert!(ctx.get("charge").is_none());
+        assert!(ctx.get("solvation").is_none());
+    }
 }
