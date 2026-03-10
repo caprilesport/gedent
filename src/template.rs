@@ -56,7 +56,6 @@ impl Template {
     pub fn render(&self, context: &tera::Context) -> Result<String, Error> {
         let mut tera = Tera::default();
         tera.register_function("print_molecule", print_molecule);
-        tera.register_function("split_molecule", split_molecule);
         tera.add_raw_template(&self.name, &self.body)?;
         Ok(tera.render(&self.name, context)?)
     }
@@ -213,53 +212,13 @@ pub fn print_molecule(args: &HashMap<String, Value>) -> Result<Value, tera::Erro
         }
     };
 
-    Ok(to_value(molecule.atoms.join("\n"))?)
-}
-
-pub fn split_molecule(args: &HashMap<String, Value>) -> Result<Value, tera::Error> {
-    let molecule: Molecule = match args.get("molecule") {
-        Some(val) => match from_value(val.clone()) {
-            Ok(v) => v,
-            Err(_) => {
-                return Err(tera::Error::msg(format!(
-                    "Function `split_molecule` received molecule={val} but `molecule` can only be of type Molecule"
-                )));
-            }
-        },
-        None => {
-            return Err(tera::Error::msg(
-                "Function `split_molecule` didn't receive a `molecule` argument",
-            ))
-        }
-    };
-
-    let index: usize = match args.get("index") {
-        Some(val) => match from_value(val.clone()) {
-            Ok(v) => v,
-            Err(_) => {
-                return Err(tera::Error::msg(format!(
-                    "Function `split_molecule` received index={val} but `index` can only be of type integer."
-                )));
-            }
-        },
-        None => {
-            return Err(tera::Error::msg(
-                "Function `split_molecule` didn't receive a `index` argument",
-            ))
-        }
-    };
-
-    let (mol1, mol2) = match molecule.split(index) {
-        Ok(molecules) => molecules,
-        Err(err) => {
-            return Err(tera::Error::msg(format!(
-                "Failed to split molecules, caused by {err}"
-            )))
-        }
-    };
-    let molecules = vec![mol1, mol2];
-
-    Ok(to_value(molecules)?)
+    let formatted = molecule
+        .atoms
+        .iter()
+        .map(std::string::ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("\n");
+    Ok(to_value(formatted)?)
 }
 
 #[cfg(test)]

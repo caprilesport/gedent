@@ -1,207 +1,186 @@
 use anyhow::{Context, Error, Result};
 use serde::{Deserialize, Serialize};
+use std::fmt;
+use std::io::BufRead;
 use std::path::PathBuf;
 
-#[derive(PartialEq, Eq, Serialize, Deserialize, Debug, Clone)]
+#[derive(PartialEq, Serialize, Deserialize, Debug, Clone)]
+pub struct Atom {
+    pub symbol: String,
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+}
+
+impl Atom {
+    fn from_line(line: &str) -> Result<Self, Error> {
+        let mut parts = line.split_whitespace();
+        let symbol = parts
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("Missing element symbol"))?
+            .to_string();
+        let x = parts
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("Missing x coordinate"))?
+            .parse::<f64>()
+            .context("x coordinate is not a valid float")?;
+        let y = parts
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("Missing y coordinate"))?
+            .parse::<f64>()
+            .context("y coordinate is not a valid float")?;
+        let z = parts
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("Missing z coordinate"))?
+            .parse::<f64>()
+            .context("z coordinate is not a valid float")?;
+        Ok(Self { symbol, x, y, z })
+    }
+}
+
+impl fmt::Display for Atom {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{:<4}{:14.8}{:14.8}{:14.8}",
+            self.symbol, self.x, self.y, self.z
+        )
+    }
+}
+
+#[derive(PartialEq, Serialize, Deserialize, Debug, Clone)]
 pub struct Molecule {
-    pub filename: String,
-    pub description: String,
-    pub atoms: Vec<String>,
+    pub description: Option<String>,
+    pub atoms: Vec<Atom>,
 }
 
 impl Molecule {
-    const fn new() -> Self {
-        Self {
-            filename: String::new(),
-            description: String::new(),
-            atoms: Vec::new(),
+    pub fn from_reader(reader: impl BufRead) -> Result<Self, Error> {
+        let lines: Vec<String> = reader
+            .lines()
+            .collect::<std::io::Result<Vec<_>>>()
+            .context("Failed to read xyz content")?;
+
+        let mut iter = lines.iter().map(String::as_str);
+
+        // skip any leading blank lines, then read atom count
+        let natoms: usize = iter
+            .by_ref()
+            .find(|l| !l.trim().is_empty())
+            .ok_or_else(|| anyhow::anyhow!("xyz content is empty"))?
+            .trim()
+            .parse()
+            .context("First non-blank line must be an integer atom count")?;
+
+        // description is always the very next line, even if blank
+        let description_line = iter
+            .next()
+            .ok_or_else(|| anyhow::anyhow!("xyz content is missing a description line"))?;
+        let description = if description_line.trim().is_empty() {
+            None
+        } else {
+            Some(description_line.to_string())
+        };
+
+        // read exactly natoms atom lines, skipping any blank lines
+        let mut atoms = Vec::with_capacity(natoms);
+        for i in 0..natoms {
+            let line = iter
+                .by_ref()
+                .find(|l| !l.trim().is_empty())
+                .ok_or_else(|| anyhow::anyhow!("Expected {} atoms but found only {}", natoms, i))?;
+            atoms.push(Atom::from_line(line).context(format!(
+                "Failed to parse atom {} from: \"{}\"",
+                i + 1,
+                line
+            ))?);
         }
+
+        Ok(Self { description, atoms })
     }
 
-    pub fn split(&self, index: usize) -> Result<(Self, Self), Error> {
-        if index >= self.atoms.len() {
-            anyhow::bail!(
-                "Can't split molecule at given index. \nIndex is bigger than size of molecule."
-            )
-        }
-        let mut molecule1 = self.clone();
-        let mut molecule2 = self.clone();
-
-        molecule1.atoms = self.atoms[0..index].to_vec();
-        molecule1.filename.push_str("_split_1");
-        molecule2.atoms = self.atoms[index..].to_vec();
-        molecule2.filename.push_str("_split_2");
-        println!("{:?}, {:?}", molecule1.atoms, molecule2.atoms);
-        Ok((molecule1, molecule2))
-    }
-
-    // returns a vec because we support a file with multiple xyz
-    // the check for atom length got kinda ugly.. see if there is some smarter way to do this
-    pub fn from_xyz(mut xyz_path: PathBuf) -> Result<Vec<Self>, Error> {
-        let xyz_file = std::fs::read_to_string(&xyz_path)
-            .context(format!("Failed to read xyz file {}", xyz_path.display()))?;
-        xyz_path.set_extension("");
-        let name = xyz_path.to_string_lossy().to_string();
-        let mut xyz_lines = xyz_file.lines();
-        let mut molecules: Vec<Self> = vec![];
-        let mut mol = Self::new();
-        mol.filename.clone_from(&name);
-        let mut natoms = 0;
-        let mut counter = 0;
-
-        loop {
-            match xyz_lines.next() {
-                None => {
-                    if mol.atoms.len() != natoms {
-                        anyhow::bail!(
-                            "Error parsing xyz files {}. \nExpected {} atoms found {}, exiting...",
-                            xyz_path.display(),
-                            natoms,
-                            mol.atoms.len()
-                        )
-                    }
-                    match counter {
-                        0 => (),
-                        _ => {
-                            mol.filename = format!("{name}_{counter}");
-                        }
-                    }
-                    molecules.push(mol.clone());
-                    break;
-                }
-                Some(line) => {
-                    if let Ok(n) = line.trim().parse::<usize>() {
-                        if !mol.atoms.is_empty() {
-                            if mol.atoms.len() != natoms {
-                                anyhow::bail!(
-                                    "Error parsing xyz files {}. \nExpected {} atoms found {}, exiting...",
-                                    xyz_path.display(),
-                                    natoms,
-                                    mol.atoms.len()
-                                )
-                            }
-                            natoms = 0;
-                            mol.filename = format!("{name}_{counter}");
-                            molecules.push(mol.clone());
-                            counter += 1;
-                        }
-
-                        natoms += n;
-                        mol.description = xyz_lines.next().unwrap_or("").to_string();
-                        mol.atoms.clear();
-                    } else {
-                        mol.atoms.push(line.to_string());
-                    }
-                }
-            }
-        }
-
-        Ok(molecules)
+    pub fn from_xyz(path: &PathBuf) -> Result<Self, Error> {
+        let file = std::fs::File::open(path)
+            .context(format!("Failed to open xyz file {}", path.display()))?;
+        Self::from_reader(std::io::BufReader::new(file))
+            .context(format!("Failed to parse xyz file {}", path.display()))
     }
 }
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
+    use std::io::Cursor;
 
-    #[test]
-    fn xyz_parse_works() {
-        let test_ch4 = "5
-symmetry c1
-C       -0.702728547      0.000000000     -1.996862306
-H       -0.172294601     -0.951333822     -1.920672276
-H        0.013819138      0.821859802     -1.939355658
-H       -1.419276232      0.083844265     -1.177270525
-H       -1.233162492      0.045629756     -2.950150766"
-            .to_string();
-        let test_ch4_h2o = "5
-symmetry c1
-C       -0.702728547      0.000000000     -1.996862306
-H       -0.172294601     -0.951333822     -1.920672276
-H        0.013819138      0.821859802     -1.939355658
-H       -1.419276232      0.083844265     -1.177270525
-H       -1.233162492      0.045629756     -2.950150766
-3
-symmetry c1
-O       -1.537653553      0.000000000     -2.881263893
-H       -1.537653553      0.759337000     -2.285220893
-H       -1.537653553     -0.759337000     -2.285220893"
-            .to_string();
+    const CH4_XYZ: &str = "5\nsymmetry c1\n\
+        C       -0.702728547      0.000000000     -1.996862306\n\
+        H       -0.172294601     -0.951333822     -1.920672276\n\
+        H        0.013819138      0.821859802     -1.939355658\n\
+        H       -1.419276232      0.083844265     -1.177270525\n\
+        H       -1.233162492      0.045629756     -2.950150766";
 
-        // create dummy files to load
-        std::fs::write("./ch4.xyz", test_ch4).unwrap();
-        std::fs::write("./ch4_h2o.xyz", test_ch4_h2o).unwrap();
-
-        let ch4 = Molecule {
-            filename: "./ch4".to_string(),
-            description: "symmetry c1".to_string(),
-            atoms: vec![
-                "C       -0.702728547      0.000000000     -1.996862306".to_string(),
-                "H       -0.172294601     -0.951333822     -1.920672276".to_string(),
-                "H        0.013819138      0.821859802     -1.939355658".to_string(),
-                "H       -1.419276232      0.083844265     -1.177270525".to_string(),
-                "H       -1.233162492      0.045629756     -2.950150766".to_string(),
-            ],
-        };
-        let h2o = Molecule {
-            filename: "./ch4_h2o_1".to_string(),
-            description: "symmetry c1".to_string(),
-            atoms: vec![
-                "O       -1.537653553      0.000000000     -2.881263893".to_string(),
-                "H       -1.537653553      0.759337000     -2.285220893".to_string(),
-                "H       -1.537653553     -0.759337000     -2.285220893".to_string(),
-            ],
-        };
-        let mut ch4_2 = ch4.clone();
-        ch4_2.filename = "./ch4_h2o_0".to_string();
-
-        match Molecule::from_xyz(PathBuf::from("./ch4.xyz")) {
-            Ok(mol) => assert_eq!(mol, vec![ch4]),
-            Err(_) => core::panic!("Failes test ch4"),
-        };
-
-        match Molecule::from_xyz(PathBuf::from("./ch4_h2o.xyz")) {
-            Ok(mol) => assert_eq!(mol, vec![ch4_2, h2o]),
-            Err(_) => core::panic!("Failed test ch4 h2o"),
-        };
-
-        std::fs::remove_file("./ch4.xyz").unwrap();
-        std::fs::remove_file("./ch4_h2o.xyz").unwrap();
+    fn ch4_atoms() -> Vec<Atom> {
+        vec![
+            Atom {
+                symbol: "C".to_string(),
+                x: -0.702_728_547,
+                y: 0.0,
+                z: -1.996_862_306,
+            },
+            Atom {
+                symbol: "H".to_string(),
+                x: -0.172_294_601,
+                y: -0.951_333_822,
+                z: -1.920_672_276,
+            },
+            Atom {
+                symbol: "H".to_string(),
+                x: 0.013_819_138,
+                y: 0.821_859_802,
+                z: -1.939_355_658,
+            },
+            Atom {
+                symbol: "H".to_string(),
+                x: -1.419_276_232,
+                y: 0.083_844_265,
+                z: -1.177_270_525,
+            },
+            Atom {
+                symbol: "H".to_string(),
+                x: -1.233_162_492,
+                y: 0.045_629_756,
+                z: -2.950_150_766,
+            },
+        ]
     }
 
     #[test]
-    fn molecule_split_works() {
-        let ch4 = Molecule {
-            filename: "./ch4".to_string(),
-            description: "symmetry c1".to_string(),
-            atoms: vec![
-                "C       -0.702728547      0.000000000     -1.996862306".to_string(),
-                "H       -0.172294601     -0.951333822     -1.920672276".to_string(),
-                "H        0.013819138      0.821859802     -1.939355658".to_string(),
-                "H       -1.419276232      0.083844265     -1.177270525".to_string(),
-                "H       -1.233162492      0.045629756     -2.950150766".to_string(),
-            ],
-        };
+    fn xyz_parse_works() {
+        let mol = Molecule::from_reader(Cursor::new(CH4_XYZ)).unwrap();
+        assert_eq!(mol.description, Some("symmetry c1".to_string()));
+        assert_eq!(mol.atoms, ch4_atoms());
+    }
 
-        let ch3 = Molecule {
-            filename: "./ch4_split_1".to_string(),
-            description: "symmetry c1".to_string(),
-            atoms: vec![
-                "C       -0.702728547      0.000000000     -1.996862306".to_string(),
-                "H       -0.172294601     -0.951333822     -1.920672276".to_string(),
-                "H        0.013819138      0.821859802     -1.939355658".to_string(),
-                "H       -1.419276232      0.083844265     -1.177270525".to_string(),
-            ],
-        };
-        let h = Molecule {
-            filename: "./ch4_split_2".to_string(),
-            description: "symmetry c1".to_string(),
-            atoms: vec!["H       -1.233162492      0.045629756     -2.950150766".to_string()],
-        };
-        match ch4.split(4) {
-            Ok(mol) => assert_eq!(mol, (ch3, h), "Failed to split molecule"),
-            Err(_) => core::panic!(),
-        }
+    #[test]
+    fn xyz_parse_trailing_blank_lines() {
+        let input = format!("{CH4_XYZ}\n\n\n");
+        let mol = Molecule::from_reader(Cursor::new(input)).unwrap();
+        assert_eq!(mol.atoms, ch4_atoms());
+    }
+
+    #[test]
+    fn xyz_parse_insufficient_atoms_errors() {
+        let input = "10\nsymmetry c1\nC  0.0  0.0  0.0";
+        assert!(
+            Molecule::from_reader(Cursor::new(input)).is_err(),
+            "Expected error when atom count exceeds available lines"
+        );
+    }
+
+    #[test]
+    fn xyz_parse_empty_description() {
+        let input = "1\n\nC  0.0  0.0  0.0";
+        let mol = Molecule::from_reader(Cursor::new(input)).unwrap();
+        assert_eq!(mol.description, None);
     }
 }

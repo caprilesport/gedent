@@ -36,7 +36,6 @@ struct GenOptions {
     mult: Option<usize>,
     nprocs: Option<usize>,
     mem: Option<usize>,
-    split_index: Option<usize>,
 }
 
 #[derive(Debug)]
@@ -115,9 +114,6 @@ enum Mode {
         /// Set mem
         #[arg(long, default_value = None)]
         mem: Option<usize>,
-        /// Set `split_index`
-        #[arg(long, default_value = None)]
-        split_index: Option<usize>,
     },
     // Subcommand to deal with configurations
     /// Access gedent configuration
@@ -237,12 +233,11 @@ fn main() -> Result<()> {
                 mult,
                 nprocs,
                 mem,
-                split_index,
             } => {
-                let mut molecules: Vec<Molecule> = vec![];
+                let mut molecules: Vec<(PathBuf, Molecule)> = vec![];
                 if let Some(files) = xyz_files {
                     for file in files {
-                        molecules = [molecules, Molecule::from_xyz(file)?].concat();
+                        molecules.push((file.clone(), Molecule::from_xyz(&file)?));
                     }
                 }
                 let template = Template::get(template_name)?;
@@ -257,7 +252,6 @@ fn main() -> Result<()> {
                     mult,
                     nprocs,
                     mem,
-                    split_index,
                 };
                 let results = generate_input(&template, molecules, opts)?;
                 for input in results {
@@ -441,7 +435,7 @@ fn gedent_init(config: Option<PathBuf>) -> Result<(), Error> {
 
 fn generate_input(
     template: &Template,
-    molecules: Vec<Molecule>,
+    molecules: Vec<(PathBuf, Molecule)>,
     opts: GenOptions,
 ) -> Result<Vec<Input>, Error> {
     let mut context = tera::Context::new();
@@ -466,7 +460,6 @@ fn generate_input(
         ("mult", opts.mult),
         ("nprocs", opts.nprocs),
         ("mem", opts.mem),
-        ("split_index", opts.split_index),
     ] {
         if let Some(v) = v {
             context.insert(k, &v);
@@ -503,11 +496,16 @@ fn generate_input(
         });
     }
 
-    for molecule in molecules {
+    for (path, molecule) in molecules {
+        let stem = path
+            .file_stem()
+            .ok_or_else(|| anyhow!("Can't retrieve stem from path {}", path.display()))?
+            .to_string_lossy();
         let mut mol_context = context.clone();
+        mol_context.insert("name", stem.as_ref());
         mol_context.insert("Molecule", &molecule);
         results.push(Input {
-            filename: PathBuf::from(molecule.filename).with_extension(extension),
+            filename: PathBuf::from(stem.as_ref()).with_extension(extension),
             content: template.render(&mol_context)?,
         });
     }
