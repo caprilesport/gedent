@@ -1,6 +1,9 @@
---@
-extension = "gjf"
---@
+{#
+software = "gaussian"
+jobtype = "nbo_del"
+requires = ["method", "basis_set", "charge", "mult", "nprocs", "mem", "Molecule"]
+description = "NBO deletion analysis"
+#}
 %chk={{ Molecule.filename }}.chk
 %nproc={{ nprocs }}
 %mem={{ mem }}GB
@@ -8,9 +11,8 @@ extension = "gjf"
 
 job title: {{ Molecule.filename }}
 
-{{ charge }} {{mult}}
-{{print_molecule(molecule=Molecule)}}
+{{ charge }} {{ mult }}
+{{ print_molecule(molecule=Molecule) }}
 
 $nbo  $end
 $del  lewis  $end
-

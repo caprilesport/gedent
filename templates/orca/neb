@@ -1,4 +1,10 @@
-! {{ method }} {{ basis_set }} 
+{#
+software = "orca"
+jobtype = "neb"
+requires = ["method", "basis_set", "charge", "mult", "nprocs", "mem", "xyz_file"]
+description = "Nudged elastic band transition state search"
+#}
+! {{ method }} {{ basis_set }}
 ! NEB-TS NumFreq IRC
 
 *xyzfile {{ charge }} {{ mult }} {{ xyz_file }}
@@ -7,7 +13,7 @@
  nprocs {{ nprocs }}
 end
 
-%maxcore {{ mem }} 
+%maxcore {{ mem }}
 
 {% if solvation -%}
 %cpcm
@@ -28,7 +34,7 @@ end
   {B 12 23} # bond active in ts
  end
  ts_active_atoms
-  {3 7 12 14 15 22 23 27} # atons involved in ts
+  {3 7 12 14 15 22 23 27} # atoms involved in ts
  end
  maxiter 256
 end
@@ -39,4 +45,3 @@ end
  tolmaxg 9e-4
  maxiter 256
 end
-

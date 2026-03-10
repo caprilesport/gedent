@@ -1,3 +1,9 @@
+{#
+software = "xtb"
+jobtype = "scan"
+requires = []
+description = "Relaxed surface scan"
+#}
 $constrain
    force constant=0.5
    distance: 1, 4, 0.5
@@ -10,4 +16,3 @@ $scan
 $opt
    maxcycle=5
 $end
-

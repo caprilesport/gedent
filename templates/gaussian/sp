@@ -1,6 +1,9 @@
---@
-extension = "gjf"
---@
+{#
+software = "gaussian"
+jobtype = "sp"
+requires = ["method", "basis_set", "charge", "mult", "nprocs", "mem", "Molecule"]
+description = "Single point energy"
+#}
 {%if solvation-%}
 {%set solvent="scrf=(smd, solvent=" ~ solvent ~ ")"-%}
 {%else-%}
@@ -8,10 +11,9 @@ extension = "gjf"
 {%endif-%}
 %nproc={{ nprocs }}
 %mem={{ mem }}GB
-# {{ method }}/{{ basis_set }} freq=noraman scrf=(smd,solvent=ethanol) temperature=353
+# {{ method }}/{{ basis_set }} {{ solvent }}
 
 job title: {{ Molecule.filename }}
 
-{{ charge }} {{mult}}
-{{print_molecule(molecule=Molecule)}}
-
+{{ charge }} {{ mult }}
+{{ print_molecule(molecule=Molecule) }}

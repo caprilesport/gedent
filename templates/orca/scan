@@ -1,4 +1,10 @@
-! {{ method }} {{ basis_set }} 
+{#
+software = "orca"
+jobtype = "scan"
+requires = ["method", "basis_set", "charge", "mult", "Molecule"]
+description = "Relaxed surface scan"
+#}
+! {{ method }} {{ basis_set }}
 ! Opt
 
 {% if solvation -%}
@@ -7,14 +13,14 @@
  smdsolvent "{{ solvent }}"
 end
 
-{% endif -%} 
+{% endif -%}
 
 %geom
  scan
-  B 12 23 = 2.21803, 1.19935, 21 # B atom1 atom2 = beginning, end, steps 
+  B 12 23 = 2.21803, 1.19935, 21 # B atom1 atom2 = beginning, end, steps
  end
 end
 
 *xyz {{ charge }} {{ mult }}
-{{ print_molecule(molecule="Molecule") }}
+{{ print_molecule(molecule = Molecule) }}
 *

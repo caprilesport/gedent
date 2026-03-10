@@ -10,6 +10,8 @@ const CONFIG_NAME: &str = "gedent.toml";
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GedentConfig {
     pub default_extension: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub software: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -49,6 +51,7 @@ pub struct Config {
 #[derive(Debug, Default, Deserialize)]
 struct RawGedentConfig {
     default_extension: Option<String>,
+    software: Option<String>,
 }
 
 /// All-optional config used to parse individual files in the cascade chain.
@@ -91,6 +94,7 @@ impl RawConfig {
                     .gedent
                     .default_extension
                     .or(self.gedent.default_extension),
+                software: overlay.gedent.software.or(self.gedent.software),
             },
             chemistry: chem,
             parameters: params,
@@ -105,6 +109,7 @@ impl RawConfig {
                     .gedent
                     .default_extension
                     .unwrap_or_else(|| "inp".to_string()),
+                software: self.gedent.software,
             },
             chemistry: self.chemistry,
             parameters: self.parameters,
@@ -249,6 +254,7 @@ mod tests {
         RawConfig {
             gedent: RawGedentConfig {
                 default_extension: default_extension.map(str::to_string),
+                software: None,
             },
             chemistry: ChemistryConfig {
                 method: method.map(str::to_string),
@@ -332,6 +338,7 @@ mod tests {
         let global = RawConfig {
             gedent: RawGedentConfig {
                 default_extension: Some("inp".to_string()),
+                software: None,
             },
             chemistry: ChemistryConfig {
                 method: Some("pbe0".to_string()),

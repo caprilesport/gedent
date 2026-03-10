@@ -1,14 +1,17 @@
---@
-extension = "inp"
---@
-! {{ method }} {{ basis_set }} 
+{#
+software = "orca"
+jobtype = "opt"
+requires = ["method", "basis_set", "charge", "mult", "nprocs", "mem", "Molecule"]
+description = "Geometry optimization and frequency"
+#}
+! {{ method }} {{ basis_set }}
 ! Opt freq D3BJ
 
 %pal
  nprocs {{ nprocs }}
 end
 
-%maxcore {{ mem }} 
+%maxcore {{ mem }}
 
 {% if solvation -%}
 %cpcm
@@ -16,7 +19,7 @@ end
  smdsolvent "{{ solvent }}"
 end
 
-{% endif -%} 
+{% endif -%}
 
 {% if start_hessian -%}
 %Geom
@@ -24,7 +27,7 @@ end
  InHessName "{{ Molecule.filename }}.hess"
 end
 
-{% endif -%} 
+{% endif -%}
 
 *xyz {{ charge }} {{ mult }}
 {{ print_molecule(molecule = Molecule) }}

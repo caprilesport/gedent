@@ -1,6 +1,9 @@
---@
-extension = "run"
---@
+{#
+software = "adf"
+jobtype = "eda"
+requires = ["basis_set", "functional", "method_class", "charge", "Molecule", "split_index"]
+description = "Energy decomposition analysis (NOTE: requires split_molecule — not yet implemented)"
+#}
 AMS_JOBNAME=eda $AMSBIN/ams <<eor
 
 Task SinglePoint

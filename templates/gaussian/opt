@@ -1,6 +1,9 @@
---@
-extension = "gjf"
---@
+{#
+software = "gaussian"
+jobtype = "opt"
+requires = ["method", "basis_set", "charge", "mult", "nprocs", "mem", "Molecule"]
+description = "Geometry optimization and frequency"
+#}
 {%if solvation-%}
 {%set solvent="scrf=(smd, solvent=" ~ solvent ~ ")"-%}
 {%else-%}
@@ -13,6 +16,5 @@ extension = "gjf"
 
 job title: {{ Molecule.filename }}
 
-{{ charge }} {{mult}}
-{{print_molecule(molecule=Molecule)}}
-
+{{ charge }} {{ mult }}
+{{ print_molecule(molecule=Molecule) }}

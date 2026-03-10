@@ -1,6 +1,9 @@
---@
-extension = "run"
---@
+{#
+software = "adf"
+jobtype = "sp"
+requires = ["basis_set", "functional", "method_class", "charge", "Molecule"]
+description = "Single point energy"
+#}
 AMS_JOBNAME={{ Molecule.filename }} $AMSBIN/ams <<eor
 
 Task SinglePoint

@@ -24,6 +24,7 @@ static GEDENT_CONFIG: &str = include_str!("../gedent.toml");
 
 #[derive(Debug, Default)]
 struct GenOptions {
+    software: Option<String>,
     ext: Option<String>,
     method: Option<String>,
     basis_set: Option<String>,
@@ -87,6 +88,9 @@ enum Mode {
         /// Override output file extension
         #[arg(long, default_value = None)]
         ext: Option<String>,
+        /// Override software (used for template disambiguation)
+        #[arg(long, default_value = None)]
+        software: Option<String>,
         /// Set method
         #[arg(long, default_value = None)]
         method: Option<String>,
@@ -134,6 +138,9 @@ enum Mode {
     // Subcommand for init gedent "repo"
     /// Initiate a gedent project in the current directory.
     Init {
+        /// Set software (used for template disambiguation)
+        #[arg(long, default_value = None)]
+        software: Option<String>,
         /// Set method
         #[arg(long, default_value = None)]
         method: Option<String>,
@@ -226,6 +233,7 @@ fn main() -> Result<()> {
                 xyz_files,
                 print,
                 ext,
+                software,
                 method,
                 basis_set,
                 dispersion,
@@ -243,8 +251,8 @@ fn main() -> Result<()> {
                         molecules.push((file.clone(), Molecule::from_xyz(&file)?));
                     }
                 }
-                let template = Template::get(template_name)?;
                 let opts = GenOptions {
+                    software,
                     ext,
                     method,
                     basis_set,
@@ -257,7 +265,7 @@ fn main() -> Result<()> {
                     nprocs,
                     mem,
                 };
-                let results = generate_input(&template, molecules, &opts)?;
+                let results = generate_input(template_name, molecules, &opts)?;
                 for input in results {
                     if print {
                         println!("{}", input.content);
@@ -279,21 +287,24 @@ fn main() -> Result<()> {
                 template_subcommand,
             } => match template_subcommand {
                 TemplateSubcommand::Print { template } => {
-                    Template::print_template(&template)?;
+                    let software = Config::get().ok().and_then(|c| c.gedent.software);
+                    Template::print_template(&template, software.as_deref())?;
                 }
                 TemplateSubcommand::New {
                     software,
                     template_name,
                 } => {
-                    Template::from_preset(software, template_name)?;
+                    Template::from_preset(software, &template_name)?;
                 }
                 TemplateSubcommand::List {} => Template::list_templates()?,
                 TemplateSubcommand::Edit { template } => {
-                    Template::edit_template(&template)?;
+                    let software = Config::get().ok().and_then(|c| c.gedent.software);
+                    Template::edit_template(&template, software.as_deref())?;
                 }
             },
 
             Mode::Init {
+                software,
                 method,
                 basis_set,
                 dispersion,
@@ -303,17 +314,20 @@ fn main() -> Result<()> {
                 mult,
                 nprocs,
                 mem,
-            } => gedent_init(ChemistryConfig {
-                method,
-                basis_set,
-                charge,
-                mult,
-                dispersion,
-                solvent,
-                solvation_model,
-                nprocs,
-                mem,
-            })?,
+            } => gedent_init(
+                software,
+                ChemistryConfig {
+                    method,
+                    basis_set,
+                    charge,
+                    mult,
+                    dispersion,
+                    solvent,
+                    solvation_model,
+                    nprocs,
+                    mem,
+                },
+            )?,
         }
     }
 
@@ -397,12 +411,13 @@ fn setup_gedent() -> Result<(), Error> {
     Ok(())
 }
 
-fn gedent_init(chemistry: ChemistryConfig) -> Result<(), Error> {
+fn gedent_init(software: Option<String>, chemistry: ChemistryConfig) -> Result<(), Error> {
     if std::path::Path::try_exists(&PathBuf::from("./gedent.toml"))? {
         bail!("gedent.toml already exists, exiting...");
     }
 
-    let no_flags_set = chemistry.method.is_none()
+    let no_flags_set = software.is_none()
+        && chemistry.method.is_none()
         && chemistry.basis_set.is_none()
         && chemistry.dispersion.is_none()
         && chemistry.solvent.is_none()
@@ -413,13 +428,22 @@ fn gedent_init(chemistry: ChemistryConfig) -> Result<(), Error> {
         && chemistry.mem.is_none();
 
     let content = if no_flags_set {
-        "[chemistry]\n\n[parameters]\n".to_string()
+        "[gedent]\n\n[chemistry]\n\n[parameters]\n".to_string()
     } else {
         #[derive(serde::Serialize)]
+        struct InitGedentConfig {
+            #[serde(skip_serializing_if = "Option::is_none")]
+            software: Option<String>,
+        }
+        #[derive(serde::Serialize)]
         struct InitConfig {
+            #[serde(skip_serializing_if = "Option::is_none")]
+            gedent: Option<InitGedentConfig>,
             chemistry: ChemistryConfig,
         }
-        toml::to_string(&InitConfig { chemistry }).wrap_err("Failed to serialize init config")?
+        let gedent = software.map(|sw| InitGedentConfig { software: Some(sw) });
+        toml::to_string(&InitConfig { gedent, chemistry })
+            .wrap_err("Failed to serialize init config")?
     };
 
     write("./gedent.toml", content).wrap_err("Failed to write gedent.toml")?;
@@ -492,11 +516,17 @@ fn build_context(chemistry: &ChemistryConfig, opts: &GenOptions) -> tera::Contex
 }
 
 fn generate_input(
-    template: &Template,
+    template_name: String,
     molecules: Vec<(PathBuf, Molecule)>,
     opts: &GenOptions,
 ) -> Result<Vec<Input>, Error> {
     let config = Config::get()?;
+
+    let software = opts
+        .software
+        .as_deref()
+        .or(config.gedent.software.as_deref());
+    let template = Template::get(template_name, software)?;
 
     let mut context = build_context(&config.chemistry, opts);
     for (key, value) in config.parameters {
