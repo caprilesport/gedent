@@ -2,6 +2,7 @@ use crate::config::Config;
 use crate::Molecule;
 use color_eyre::eyre::{bail, Report as Error, Result, WrapErr};
 use comfy_table::{presets, Table};
+use log::debug;
 use serde_json::value::{from_value, to_value, Value};
 use std::collections::HashMap;
 use std::fs::{copy, read_dir, read_to_string};
@@ -222,12 +223,16 @@ impl Template {
                 "No template named \"{}\" found.\nHint: run `gedent template list` to see available templates.",
                 template
             ),
-            1 => Ok(matches.remove(0)),
+            1 => {
+                debug!("Template {:?} resolved to {}", template, matches[0].display());
+                Ok(matches.remove(0))
+            }
             _ => {
                 // Use software config as tiebreaker.
                 if let Some(sw) = software {
                     let tiebreak = templates_home.join(sw).join(template);
                     if tiebreak.try_exists()? {
+                        debug!("Template {:?} resolved to {} via software tiebreaker {:?}", template, tiebreak.display(), sw);
                         return Ok(tiebreak);
                     }
                 }

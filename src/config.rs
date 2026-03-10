@@ -1,4 +1,5 @@
 use color_eyre::eyre::{bail, eyre, Report as Error, Result, WrapErr};
+use log::debug;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use toml::{map::Map, Value};
@@ -205,6 +206,9 @@ impl Config {
         locals.reverse(); // cwd-first → global-first order
         let mut chain = vec![global];
         chain.extend(locals);
+        for path in &chain {
+            debug!("Config chain: {}", path.display());
+        }
         Ok(chain)
     }
 

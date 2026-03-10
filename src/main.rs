@@ -5,8 +5,10 @@ use crate::molecule::Molecule;
 use crate::template::Template;
 use clap::{Command, CommandFactory, Parser, Subcommand};
 use clap_complete::{generate, Generator, Shell};
+use clap_verbosity_flag::{Verbosity, WarnLevel};
 use color_eyre::eyre::{bail, eyre, Report as Error, Result, WrapErr};
 use include_dir::{include_dir, Dir};
+use log::{debug, info};
 use std::fs::{read_dir, write};
 use std::io;
 use std::path::PathBuf;
@@ -47,7 +49,7 @@ struct Input {
 
 impl Input {
     fn write(self) -> Result<(), Error> {
-        println!("Writing {}", self.filename.display());
+        info!("Writing {}", self.filename.display());
         write(&self.filename, &self.content).wrap_err("Failed to save input.")
     }
 }
@@ -63,13 +65,13 @@ struct Cli {
     #[arg(long, default_value = None)]
     health: bool,
     /// Set up gedent configuration directory.
-    // Bare, presets and full can be passed to create a bare directory with just the config, Presets create the config and the
-    /// presets, full creates the directory with templates
     #[arg(long, default_value = None)]
     set_up: bool,
-    // If provided, outputs the completion file for given shell
+    /// If provided, outputs the completion file for given shell.
     #[arg(long = "generate", value_enum)]
     generator: Option<Shell>,
+    #[command(flatten)]
+    verbose: Verbosity<WarnLevel>,
 }
 
 #[derive(Debug, Subcommand)]
@@ -225,9 +227,15 @@ fn main() -> Result<()> {
     color_eyre::install()?;
     let cli = Cli::parse();
 
+    env_logger::Builder::new()
+        .filter_level(cli.verbose.log_level_filter())
+        .format_timestamp(None)
+        .format_target(false)
+        .init();
+
     if let Some(generator) = cli.generator {
         let mut cmd = Cli::command();
-        eprintln!("Generating completion file for {generator:?}...");
+        info!("Generating completion file for {generator:?}...");
         print_completions(generator, &mut cmd);
     }
 
@@ -365,7 +373,7 @@ fn print_completions<G: Generator>(gen: G, cmd: &mut Command) {
 fn check_gedent_health() -> Result<(), Error> {
     match Config::gedent_home() {
         Ok(dir) => {
-            println!("Found config dir for gedent in {}.", dir.display());
+            info!("Found config dir for gedent in {}.", dir.display());
         }
         Err(err) => {
             bail!("{:?}", err);
@@ -380,13 +388,13 @@ fn check_gedent_health() -> Result<(), Error> {
     .filter_map(std::result::Result::ok)
     .map(|e| e.path().file_name().unwrap().to_string_lossy().into_owned())
     .collect();
-    println!("Found {} presets.", softwares.len());
+    info!("Found {} presets.", softwares.len());
 
     let templates_home: PathBuf = [Config::gedent_home()?, Into::into(TEMPLATES_DIR)]
         .iter()
         .collect();
     let templates = Template::get_templates(&templates_home);
-    println!("Found {} templates.", templates.len());
+    info!("Found {} templates.", templates.len());
 
     Ok(())
 }
@@ -402,16 +410,16 @@ fn setup_gedent() -> Result<(), Error> {
             config_dir.display()
         ),
         Ok(false) => {
-            println!("Creating config dir in {}.", config_dir.display());
+            info!("Creating config dir in {}.", config_dir.display());
             std::fs::create_dir(&config_dir).wrap_err("Failed to create config dir.")?;
-            println!("Creating gedent.toml.");
+            info!("Creating gedent.toml.");
             let config_path: PathBuf = [config_dir.clone(), Into::into("gedent.toml")]
                 .iter()
                 .collect();
             std::fs::write(&config_path, GEDENT_CONFIG)
                 .wrap_err("Failed to create gedent config.")?;
 
-            println!("Generating presets.");
+            info!("Generating presets.");
             let presets: PathBuf = [config_dir.clone(), Into::into(PRESETS_DIR)]
                 .iter()
                 .collect();
@@ -420,7 +428,7 @@ fn setup_gedent() -> Result<(), Error> {
                 .extract(presets)
                 .wrap_err("Failed to extract presets.")?;
 
-            println!("Generating default templates.");
+            info!("Generating default templates.");
             let templates: PathBuf = [config_dir.clone(), Into::into(TEMPLATES_DIR)]
                 .iter()
                 .collect();
@@ -471,7 +479,7 @@ fn gedent_init(software: Option<String>, chemistry: ChemistryConfig) -> Result<(
     };
 
     write("./gedent.toml", content).wrap_err("Failed to write gedent.toml")?;
-    println!("Created gedent.toml.");
+    info!("Created gedent.toml.");
     Ok(())
 }
 
@@ -550,6 +558,7 @@ fn generate_input(
         .software
         .as_deref()
         .or(config.gedent.software.as_deref());
+    debug!("Resolving template {template_name:?} with software hint {software:?}");
     let template = Template::get(template_name, software)?;
 
     let mut context = build_context(&config.chemistry, opts);
