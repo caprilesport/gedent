@@ -1,4 +1,4 @@
-use crate::config::get_gedent_home;
+use crate::config::Config;
 use crate::Molecule;
 use color_eyre::eyre::{bail, Report as Error, Result, WrapErr};
 use serde_json::value::{from_value, to_value, Value};
@@ -19,7 +19,7 @@ pub struct Template {
 
 impl Template {
     pub fn from_preset(software: String, template_name: String) -> Result<(), Error> {
-        let gedent_home = get_gedent_home()?;
+        let gedent_home = Config::gedent_home()?;
         let template_path: PathBuf = [
             gedent_home.clone(),
             Into::into(TEMPLATES_DIR),
@@ -82,7 +82,7 @@ impl Template {
     }
 
     pub fn list_templates() -> Result<(), Error> {
-        let templates_home: PathBuf = [get_gedent_home()?, Into::into(TEMPLATES_DIR)]
+        let templates_home: PathBuf = [Config::gedent_home()?, Into::into(TEMPLATES_DIR)]
             .iter()
             .collect();
         let templates = Self::get_templates(&templates_home);
@@ -94,7 +94,7 @@ impl Template {
 
     fn find_path(template: &str) -> Result<PathBuf, Error> {
         let template_path: PathBuf = [
-            get_gedent_home()?,
+            Config::gedent_home()?,
             Into::into(TEMPLATES_DIR),
             Into::into(template),
         ]

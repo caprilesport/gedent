@@ -1,6 +1,6 @@
 #![allow(clippy::multiple_crate_versions)]
 
-use crate::config::{get_gedent_home, ChemistryConfig, Config};
+use crate::config::{ChemistryConfig, Config};
 use crate::molecule::Molecule;
 use crate::template::Template;
 use clap::{Command, CommandFactory, Parser, Subcommand};
@@ -167,8 +167,12 @@ enum ConfigSubcommand {
         #[arg(short, long, default_value_t = false)]
         location: bool,
     },
-    /// Opens the currently used config file in your default editor.
-    Edit {},
+    /// Opens a config file in $EDITOR.
+    Edit {
+        /// Edit the global ~/.config/gedent/gedent.toml instead of the nearest local one.
+        #[arg(short, long, default_value_t = false)]
+        global: bool,
+    },
 }
 
 #[allow(clippy::too_many_lines)]
@@ -243,7 +247,7 @@ fn main() -> Result<()> {
                     let config = Config::get()?;
                     config.print(location)?;
                 }
-                ConfigSubcommand::Edit {} => Config::edit()?,
+                ConfigSubcommand::Edit { global } => Config::edit(global)?,
             },
 
             Mode::Template {
@@ -276,7 +280,7 @@ fn print_completions<G: Generator>(gen: G, cmd: &mut Command) {
 }
 
 fn check_gedent_health() -> Result<(), Error> {
-    match get_gedent_home() {
+    match Config::gedent_home() {
         Ok(dir) => {
             println!("Found config dir for gedent in {}.", dir.display());
         }
@@ -286,7 +290,7 @@ fn check_gedent_health() -> Result<(), Error> {
     }
 
     let softwares: Vec<String> = read_dir(
-        [get_gedent_home()?, Into::into(PRESETS_DIR)]
+        [Config::gedent_home()?, Into::into(PRESETS_DIR)]
             .iter()
             .collect::<PathBuf>(),
     )?
@@ -295,7 +299,7 @@ fn check_gedent_health() -> Result<(), Error> {
     .collect();
     println!("Found {} presets.", softwares.len());
 
-    let templates_home: PathBuf = [get_gedent_home()?, Into::into(TEMPLATES_DIR)]
+    let templates_home: PathBuf = [Config::gedent_home()?, Into::into(TEMPLATES_DIR)]
         .iter()
         .collect();
     let templates = Template::get_templates(&templates_home);
@@ -352,7 +356,7 @@ fn setup_gedent() -> Result<(), Error> {
 fn gedent_init(config: Option<PathBuf>) -> Result<(), Error> {
     let config_path = match config {
         Some(file) => file,
-        None => Config::get_path()?,
+        None => Config::gedent_home()?.join("gedent.toml"),
     };
 
     if std::path::Path::try_exists(&PathBuf::from("./gedent.toml"))? {

@@ -61,7 +61,7 @@ Future: `[chemistry]` may be sub-divided into `[solvation]`, `[relativistic]`, e
 when the validation pipeline (item 17) can act on them as groups. Not now.
 
 ### 4b. Config cascade / inheritance
-**Status:** not started
+**Status:** done
 Depends on item 4. Instead of stopping at the first `gedent.toml` found walking up
 from cwd, merge all configs in the chain. Deepest (closest to cwd) wins per key in
 both `[chemistry]` and `[parameters]`. The global `~/.config/gedent/gedent.toml`
