@@ -35,7 +35,6 @@ struct GenOptions {
     solvent: Option<Option<String>>,
     solvation_model: Option<String>,
     charge: Option<i64>,
-    hessian: bool,
     mult: Option<i64>,
     nprocs: Option<i64>,
     mem: Option<i64>,
@@ -115,9 +114,6 @@ enum Mode {
         /// Set charge
         #[arg(short, long, default_value = None)]
         charge: Option<i64>,
-        /// Set hessian
-        #[arg(long, default_value_t = false)]
-        hessian: bool,
         /// Set mult
         #[arg(short, long, default_value = None)]
         mult: Option<i64>,
@@ -193,12 +189,7 @@ enum TemplateSubcommand {
         software: String,
     },
     /// List available templates
-    List {
-        // Lists all available templates
-        // TODO: decide how to deal with organization in the folder
-        // Prints primarely in .gedent available, otherwise falls back to
-        // $XDG_CONFIG
-    },
+    List {},
     /// Edit a given template
     Edit { template: String },
 }
@@ -258,7 +249,6 @@ fn main() -> Result<()> {
                 solvent,
                 solvation_model,
                 charge,
-                hessian,
                 mult,
                 nprocs,
                 mem,
@@ -278,7 +268,6 @@ fn main() -> Result<()> {
                     solvent,
                     solvation_model,
                     charge,
-                    hessian,
                     mult,
                     nprocs,
                     mem,
@@ -529,9 +518,6 @@ fn build_context(
         if let Some(solvent) = solvation {
             context.insert("solvent", solvent);
         }
-    }
-    if opts.hessian {
-        context.insert("hessian", &true);
     }
     for (k, v) in [
         ("charge", opts.charge),

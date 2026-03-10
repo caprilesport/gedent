@@ -181,6 +181,27 @@ template automatically. Quality tiers: `quick` / `production` / `benchmark`.
 
 ## Quality
 
+### 23. `config print --location` per-file diff
+**Status:** not started
+Currently `--location` lists the config chain paths and then dumps the fully
+merged result, with no indication of where each value came from. A user seeing
+`charge = 1` has no way to know if that came from the global config or a
+`gedent.toml` five directories up. Enhance to show per-file contributions:
+
+```
+~/.config/gedent/gedent.toml
+  method = "pbe0", basis_set = "def2-tzvp", charge = 0
+
+~/projects/reaction/gedent.toml
+  charge = 1
+
+merged:
+  method = "pbe0", basis_set = "def2-tzvp", charge = 1
+```
+
+Requires threading per-file key sets through the cascade (capture which keys
+each `RawConfig` actually set before merging).
+
 ### 21. Tests
 **Status:** partial
 Added: config cascade (7 tests), xyz parser (4 tests including error cases),
