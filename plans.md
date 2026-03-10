@@ -8,7 +8,7 @@ Items are roughly ordered by priority / dependency.
 ## Refactors
 
 ### 1. Parse atoms into a real struct
-**Status:** not started
+**Status:** done
 Atoms are currently stored as raw strings (`"C  -0.702  0.000  -1.996"`).
 Parse them into `Atom { symbol: String, x: f64, y: f64, z: f64 }` at load time.
 This is the foundational change that unlocks almost everything else: atom counting,
@@ -16,14 +16,14 @@ geometric measurements, connectivity, electron counting, charge/mult validation,
 and better error messages.
 
 ### 2. Fix and harden the XYZ parser
-**Status:** not started
+**Status:** done
 Current parser breaks on trailing blank lines, doesn't validate atom line format,
 and doesn't handle Windows line endings (CRLF). Fix all of these. Also simplify
 the loop — most of the complexity comes from the multi-xyz trajectory feature
 (see item 3).
 
 ### 3. Drop multi-xyz trajectory support for now
-**Status:** not started
+**Status:** done
 In practice a single xyz file per invocation is the common case. The multi-molecule
 loop logic and the `_0`/`_1` filename suffixing is the main source of parser
 complexity. Remove it. Can be re-added later on top of a cleaner base.
@@ -59,7 +59,7 @@ flag. Per-software extension defaults can live in a config section or a software
 enum later.
 
 ### 7. Remove `split_molecule` template function
-**Status:** not started
+**Status:** done
 Too niche and premature given the current state of the codebase. Remove now,
 revisit after the domain model is solid.
 

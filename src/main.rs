@@ -3,9 +3,9 @@
 use crate::config::{get_gedent_home, select_key, Config};
 use crate::molecule::Molecule;
 use crate::template::{select_software, select_template, Template};
-use anyhow::{anyhow, Context, Error, Result};
 use clap::{Command, CommandFactory, Parser, Subcommand};
 use clap_complete::{generate, Generator, Shell};
+use color_eyre::eyre::{bail, eyre, Report as Error, Result, WrapErr};
 use dialoguer::theme::ColorfulTheme;
 use include_dir::{include_dir, Dir};
 use std::fs::{copy, read_dir, write};
@@ -47,7 +47,7 @@ struct Input {
 impl Input {
     fn write(self) -> Result<(), Error> {
         println!("Writing {}", self.filename.display());
-        write(&self.filename, &self.content).context(anyhow!("Failed to save input."))
+        write(&self.filename, &self.content).wrap_err("Failed to save input.")
     }
 }
 
@@ -201,6 +201,7 @@ enum ConfigSubcommand {
 
 #[allow(clippy::too_many_lines)]
 fn main() -> Result<()> {
+    color_eyre::install()?;
     let cli = Cli::parse();
 
     if let Some(generator) = cli.generator {
@@ -351,7 +352,7 @@ fn check_gedent_health() -> Result<(), Error> {
             println!("Found config dir for gedent in {}.", dir.display());
         }
         Err(err) => {
-            anyhow::bail!("{:?}", err);
+            bail!("{:?}", err);
         }
     }
 
@@ -376,43 +377,43 @@ fn check_gedent_health() -> Result<(), Error> {
 
 fn setup_gedent() -> Result<(), Error> {
     let mut config_dir =
-        dirs::config_dir().ok_or_else(|| anyhow!("Cant retrieve system config directory."))?;
+        dirs::config_dir().ok_or_else(|| eyre!("Cant retrieve system config directory."))?;
     config_dir.push("gedent");
 
     match config_dir.try_exists() {
-        Ok(true) => anyhow::bail!(
+        Ok(true) => bail!(
             "Gedent home already exists, if you want to set it up again delete the config dir {}.",
             config_dir.display()
         ),
         Ok(false) => {
             println!("Creating config dir in {}.", config_dir.display());
-            std::fs::create_dir(&config_dir).context("Failed to create config dir.")?;
+            std::fs::create_dir(&config_dir).wrap_err("Failed to create config dir.")?;
             println!("Creating gedent.toml.");
             let config_path: PathBuf = [config_dir.clone(), Into::into("gedent.toml")]
                 .iter()
                 .collect();
             std::fs::write(&config_path, GEDENT_CONFIG)
-                .context("Failed to create gedent config.")?;
+                .wrap_err("Failed to create gedent config.")?;
 
             println!("Generating presets.");
             let presets: PathBuf = [config_dir.clone(), Into::into(PRESETS_DIR)]
                 .iter()
                 .collect();
-            std::fs::create_dir(&presets).context("Failed to create presets dir.")?;
+            std::fs::create_dir(&presets).wrap_err("Failed to create presets dir.")?;
             INCLUDE_PRESETS_DIR
                 .extract(presets)
-                .context("Failed to extract presets.")?;
+                .wrap_err("Failed to extract presets.")?;
 
             println!("Generating default templates.");
             let templates: PathBuf = [config_dir.clone(), Into::into(TEMPLATES_DIR)]
                 .iter()
                 .collect();
-            std::fs::create_dir(&templates).context("Failed to create templates dir.")?;
+            std::fs::create_dir(&templates).wrap_err("Failed to create templates dir.")?;
             INCLUDE_TEMPLATES_DIR
                 .extract(templates)
-                .context("Failed to extract templates.")?;
+                .wrap_err("Failed to extract templates.")?;
         }
-        Err(err) => anyhow::bail!("Failed to check if gedent home exists, caused by {:?}", err),
+        Err(err) => bail!("Failed to check if gedent home exists, caused by {:?}", err),
     }
 
     Ok(())
@@ -426,7 +427,7 @@ fn gedent_init(config: Option<PathBuf>) -> Result<(), Error> {
     };
 
     if std::path::Path::try_exists(&PathBuf::from("./gedent.toml"))? {
-        anyhow::bail!("gedent.toml already exists, exiting...");
+        bail!("gedent.toml already exists, exiting...");
     }
 
     copy(config_path, "./gedent.toml")?;
@@ -488,7 +489,7 @@ fn generate_input(
         let filename = PathBuf::from(&template.name).with_extension(extension);
         let filename = filename
             .file_name()
-            .ok_or_else(|| anyhow!("Can't retrieve template name, exiting.."))?;
+            .ok_or_else(|| eyre!("Can't retrieve template name, exiting.."))?;
 
         results.push(Input {
             filename: PathBuf::from(filename),
@@ -499,7 +500,7 @@ fn generate_input(
     for (path, molecule) in molecules {
         let stem = path
             .file_stem()
-            .ok_or_else(|| anyhow!("Can't retrieve stem from path {}", path.display()))?
+            .ok_or_else(|| eyre!("Can't retrieve stem from path {}", path.display()))?
             .to_string_lossy();
         let mut mol_context = context.clone();
         mol_context.insert("name", stem.as_ref());

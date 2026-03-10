@@ -1,4 +1,4 @@
-use anyhow::{Context, Error, Result};
+use color_eyre::eyre::{eyre, Report as Error, Result, WrapErr};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::io::BufRead;
@@ -17,23 +17,23 @@ impl Atom {
         let mut parts = line.split_whitespace();
         let symbol = parts
             .next()
-            .ok_or_else(|| anyhow::anyhow!("Missing element symbol"))?
+            .ok_or_else(|| eyre!("Missing element symbol"))?
             .to_string();
         let x = parts
             .next()
-            .ok_or_else(|| anyhow::anyhow!("Missing x coordinate"))?
+            .ok_or_else(|| eyre!("Missing x coordinate"))?
             .parse::<f64>()
-            .context("x coordinate is not a valid float")?;
+            .wrap_err("x coordinate is not a valid float")?;
         let y = parts
             .next()
-            .ok_or_else(|| anyhow::anyhow!("Missing y coordinate"))?
+            .ok_or_else(|| eyre!("Missing y coordinate"))?
             .parse::<f64>()
-            .context("y coordinate is not a valid float")?;
+            .wrap_err("y coordinate is not a valid float")?;
         let z = parts
             .next()
-            .ok_or_else(|| anyhow::anyhow!("Missing z coordinate"))?
+            .ok_or_else(|| eyre!("Missing z coordinate"))?
             .parse::<f64>()
-            .context("z coordinate is not a valid float")?;
+            .wrap_err("z coordinate is not a valid float")?;
         Ok(Self { symbol, x, y, z })
     }
 }
@@ -59,7 +59,7 @@ impl Molecule {
         let lines: Vec<String> = reader
             .lines()
             .collect::<std::io::Result<Vec<_>>>()
-            .context("Failed to read xyz content")?;
+            .wrap_err("Failed to read xyz content")?;
 
         let mut iter = lines.iter().map(String::as_str);
 
@@ -67,15 +67,15 @@ impl Molecule {
         let natoms: usize = iter
             .by_ref()
             .find(|l| !l.trim().is_empty())
-            .ok_or_else(|| anyhow::anyhow!("xyz content is empty"))?
+            .ok_or_else(|| eyre!("xyz content is empty"))?
             .trim()
             .parse()
-            .context("First non-blank line must be an integer atom count")?;
+            .wrap_err("First non-blank line must be an integer atom count")?;
 
         // description is always the very next line, even if blank
         let description_line = iter
             .next()
-            .ok_or_else(|| anyhow::anyhow!("xyz content is missing a description line"))?;
+            .ok_or_else(|| eyre!("xyz content is missing a description line"))?;
         let description = if description_line.trim().is_empty() {
             None
         } else {
@@ -88,8 +88,8 @@ impl Molecule {
             let line = iter
                 .by_ref()
                 .find(|l| !l.trim().is_empty())
-                .ok_or_else(|| anyhow::anyhow!("Expected {} atoms but found only {}", natoms, i))?;
-            atoms.push(Atom::from_line(line).context(format!(
+                .ok_or_else(|| eyre!("Expected {} atoms but found only {}", natoms, i))?;
+            atoms.push(Atom::from_line(line).wrap_err(format!(
                 "Failed to parse atom {} from: \"{}\"",
                 i + 1,
                 line
@@ -101,9 +101,9 @@ impl Molecule {
 
     pub fn from_xyz(path: &PathBuf) -> Result<Self, Error> {
         let file = std::fs::File::open(path)
-            .context(format!("Failed to open xyz file {}", path.display()))?;
+            .wrap_err(format!("Failed to open xyz file {}", path.display()))?;
         Self::from_reader(std::io::BufReader::new(file))
-            .context(format!("Failed to parse xyz file {}", path.display()))
+            .wrap_err(format!("Failed to parse xyz file {}", path.display()))
     }
 }
 

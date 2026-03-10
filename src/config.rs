@@ -1,5 +1,5 @@
-use anyhow::{anyhow, Context, Error, Result};
 use clap::ValueEnum;
+use color_eyre::eyre::{bail, eyre, Report as Error, Result, WrapErr};
 use dialoguer::{theme::ColorfulTheme, FuzzySelect};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -31,7 +31,7 @@ impl Config {
     pub fn get() -> Result<Self, Error> {
         let cfg_path = Self::get_path()?;
         let cfg: Self = toml::from_str(&std::fs::read_to_string(&cfg_path)?)
-            .context(format!("Failed to read config file {}", cfg_path.display()))?;
+            .wrap_err(format!("Failed to read config file {}", cfg_path.display()))?;
         Ok(cfg)
     }
 
@@ -61,7 +61,7 @@ impl Config {
         let current_value = self
             .parameters
             .get(key)
-            .ok_or_else(|| anyhow!("Cant find {} in config.", key))?
+            .ok_or_else(|| eyre!("Cant find {} in config.", key))?
             .clone();
 
         println!("Changing config {key}, from {current_value} to {value}.");
@@ -71,7 +71,7 @@ impl Config {
             Value::Float(_) => Value::Float(value.parse::<f64>()?),
             Value::Integer(_) => Value::Integer(value.parse::<i64>()?),
             Value::Boolean(_) => Value::Boolean(value.parse::<bool>()?),
-            _ => anyhow::bail!("Unsupported type"),
+            _ => bail!("Unsupported type"),
         };
         self.parameters.insert(key.to_owned(), new_value);
 
@@ -81,14 +81,14 @@ impl Config {
     pub fn delete(&mut self, key: &str) -> Result<(), Error> {
         self.parameters
             .remove(key)
-            .ok_or_else(|| anyhow!("Failed to remove key, not found."))?;
+            .ok_or_else(|| eyre!("Failed to remove key, not found."))?;
         println!("Removed key {key}.");
         Ok(())
     }
 
     pub fn add(&mut self, key: String, value: String, toml_type: ArgType) -> Result<(), Error> {
         if self.parameters.contains_key(&key) {
-            anyhow::bail!(format!("Config already contains {}, exiting.", key));
+            bail!(format!("Config already contains {}, exiting.", key));
         }
 
         println!("Setting config {key} to {value} with argtype {toml_type:?}");
@@ -142,15 +142,15 @@ impl Config {
 
 pub fn get_gedent_home() -> Result<PathBuf, Error> {
     let mut config_dir =
-        dirs::config_dir().ok_or_else(|| anyhow!("Cant retrieve system config directory."))?;
+        dirs::config_dir().ok_or_else(|| eyre!("Cant retrieve system config directory."))?;
     config_dir.push("gedent");
     match config_dir.try_exists() {
         Ok(true) => (),
-        Ok(false) => anyhow::bail!(
+        Ok(false) => bail!(
             "Failed to retrieve gedent home, {} doesn't exist. \nCheck if you've finished the installation procces and created the config directory.",
             config_dir.display()
         ),
-        Err(err) => anyhow::bail!("Failed to retrieve gedent home, caused by {:?}", err),
+        Err(err) => bail!("Failed to retrieve gedent home, caused by {:?}", err),
     }
     Ok(config_dir)
 }

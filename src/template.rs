@@ -1,6 +1,6 @@
 use crate::config::get_gedent_home;
 use crate::Molecule;
-use anyhow::{Context, Error, Result};
+use color_eyre::eyre::{bail, Report as Error, Result, WrapErr};
 use dialoguer::{theme::ColorfulTheme, FuzzySelect};
 use serde::Deserialize;
 use serde_json::value::{from_value, to_value, Value};
@@ -43,13 +43,13 @@ impl Template {
         let boilerplate: PathBuf = [gedent_home, Into::into(PRESETS_DIR), Into::into(software)]
             .iter()
             .collect();
-        copy(&boilerplate, &template_path).context(format!(
+        copy(&boilerplate, &template_path).wrap_err(format!(
             "Cant copy base {} template to {}",
             boilerplate.display(),
             template_path.display()
         ))?;
         edit::edit_file(&template_path)
-            .context(format!("Cant open {} in editor.", template_path.display()))?;
+            .wrap_err(format!("Cant open {} in editor.", template_path.display()))?;
         Ok(())
     }
 
@@ -83,7 +83,7 @@ impl Template {
     pub fn print_template(template: &str) -> Result<(), Error> {
         let template_path = Self::find_path(template)?;
         let template = read_to_string(&template_path)
-            .context(format!("Cant find template {}", template_path.display()))?;
+            .wrap_err(format!("Cant find template {}", template_path.display()))?;
         println!("{template}");
         Ok(())
     }
@@ -115,7 +115,7 @@ impl Template {
             if next.contains("--@") {
                 loop {
                     match lines.peek() {
-                        None => anyhow::bail!("Unclosed template header: missing closing '--@'"),
+                        None => bail!("Unclosed template header: missing closing '--@'"),
                         Some(line) if line.contains("--@") => {
                             let _ = lines.next();
                             break;
@@ -134,7 +134,7 @@ impl Template {
         let template = template_lines.join("\n");
 
         let template_opts: TemplateOptions =
-            toml::from_str(&header).context("Failed to parse template header")?;
+            toml::from_str(&header).wrap_err("Failed to parse template header")?;
         Ok((template, template_opts))
     }
 
@@ -149,7 +149,7 @@ impl Template {
         if template_path.try_exists()? {
             Ok(template_path)
         } else {
-            anyhow::bail!("Cant find template {}.", template_path.display())
+            bail!("Cant find template {}.", template_path.display())
         }
     }
 
