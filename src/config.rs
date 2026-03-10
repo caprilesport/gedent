@@ -301,4 +301,46 @@ mod tests {
         let r = raw(None, None, None, &[]);
         assert_eq!(r.resolve().gedent.default_extension, "inp");
     }
+
+    #[test]
+    fn resolve_passes_through_set_values() {
+        let r = raw(
+            Some("com"),
+            Some("pbe0"),
+            Some(-1),
+            &[("key", Value::Integer(42))],
+        );
+        let config = r.resolve();
+        assert_eq!(config.gedent.default_extension, "com");
+        assert_eq!(config.chemistry.method, Some("pbe0".to_string()));
+        assert_eq!(config.chemistry.charge, Some(-1));
+        assert_eq!(config.parameters["key"], Value::Integer(42));
+    }
+
+    #[test]
+    fn cascade_three_level() {
+        // global: method=pbe0, basis=def2-tzvp, charge=0
+        let global = RawConfig {
+            gedent: RawGedentConfig {
+                default_extension: Some("inp".to_string()),
+            },
+            chemistry: ChemistryConfig {
+                method: Some("pbe0".to_string()),
+                basis_set: Some("def2-tzvp".to_string()),
+                charge: Some(0),
+                ..ChemistryConfig::default()
+            },
+            parameters: Map::new(),
+        };
+        // project: charge=1 (overrides global)
+        let project = raw(None, None, Some(1), &[]);
+        // cwd: method=b3lyp (overrides global, ignores project)
+        let cwd = raw(None, Some("b3lyp"), None, &[]);
+
+        let merged = global.merge(project).merge(cwd);
+
+        assert_eq!(merged.chemistry.method, Some("b3lyp".to_string())); // cwd wins
+        assert_eq!(merged.chemistry.basis_set, Some("def2-tzvp".to_string())); // global falls through
+        assert_eq!(merged.chemistry.charge, Some(1)); // project wins over global
+    }
 }
