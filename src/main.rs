@@ -467,12 +467,9 @@ fn generate_input(
             .file_stem()
             .ok_or_else(|| eyre!("Can't retrieve stem from path {}", path.display()))?
             .to_string_lossy();
-        let mut mol_context = context.clone();
-        mol_context.insert("name", stem.as_ref());
-        mol_context.insert("Molecule", &molecule);
         results.push(Input {
             filename: PathBuf::from(stem.as_ref()).with_extension(extension),
-            content: template.render(&mol_context)?,
+            content: template.render_with_molecule(&context, &molecule, &stem)?,
         });
     }
 

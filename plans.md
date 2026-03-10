@@ -101,7 +101,7 @@ Running `gedent init` with no flags creates an empty `gedent.toml` with bare sec
 headers as a blank slate. The cascade handles the rest.
 
 ### 4c. Improve abstractions / domain model — split `generate_input`
-**Status:** not started
+**Status:** done
 Depends on items 4 and 4b. With `[chemistry]` as a typed struct and the cascade
 in place, split `generate_input` into focused pieces:
 - `build_context(chemistry: &ChemistryConfig, params: &ParamsMap, opts: &GenOptions) -> tera::Context`

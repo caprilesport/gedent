@@ -47,6 +47,18 @@ impl Template {
         Ok(tera.render(&self.name, context)?)
     }
 
+    pub fn render_with_molecule(
+        &self,
+        context: &tera::Context,
+        molecule: &Molecule,
+        stem: &str,
+    ) -> Result<String, Error> {
+        let mut ctx = context.clone();
+        ctx.insert("name", stem);
+        ctx.insert("Molecule", molecule);
+        self.render(&ctx)
+    }
+
     pub fn get_templates(templates_home: &Path) -> Vec<String> {
         let home_len = templates_home.to_string_lossy().len();
         WalkDir::new(templates_home)
