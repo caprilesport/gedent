@@ -1,6 +1,7 @@
 use crate::config::Config;
 use crate::Molecule;
 use color_eyre::eyre::{bail, Report as Error, Result, WrapErr};
+use comfy_table::{presets, Table};
 use serde_json::value::{from_value, to_value, Value};
 use std::collections::HashMap;
 use std::fs::{copy, read_dir, read_to_string};
@@ -118,20 +119,75 @@ impl Template {
         let mut templates = Self::get_templates(&templates_home);
         templates.sort();
 
-        let mut current_software = String::new();
-        for t in templates {
-            match t.split_once('/') {
-                Some((sw, jobtype)) => {
-                    if sw != current_software {
-                        current_software = sw.to_string();
-                        println!("{sw}:");
-                    }
-                    println!("  {jobtype}");
-                }
-                None => println!("{t}"),
+        // Build (software, [(name, description)]) groups in sorted order.
+        let mut groups: Vec<(String, Vec<(String, String)>)> = Vec::new();
+        for t in &templates {
+            let (sw, name) = t.split_once('/').map_or_else(
+                || (String::new(), t.clone()),
+                |(s, n)| (s.to_string(), n.to_string()),
+            );
+            let desc = read_to_string(templates_home.join(t))
+                .ok()
+                .and_then(|body| parse_frontmatter(&body).description)
+                .unwrap_or_default();
+            match groups.last_mut() {
+                Some((g_sw, entries)) if *g_sw == sw => entries.push((name, desc)),
+                _ => groups.push((sw, vec![(name, desc)])),
             }
         }
+
+        for (sw, entries) in &groups {
+            if !sw.is_empty() {
+                println!("{sw}:");
+            }
+            let mut table = Table::new();
+            table.load_preset(presets::NOTHING);
+            for (name, desc) in entries {
+                table.add_row(vec![format!("  {name}"), desc.clone()]);
+            }
+            println!("{table}");
+        }
         Ok(())
+    }
+
+    /// Returns template names suitable for shell completion.
+    ///
+    /// Unambiguous short names (jobtype only, e.g. `neb`) are returned as-is.
+    /// When a short name collides across software directories, the software-
+    /// qualified full name is used (e.g. `orca/opt`, `xtb/opt`) — except that
+    /// the short name is also included if `software` matches one of the
+    /// candidates (since it would resolve unambiguously via the config).
+    pub fn list_names(software: Option<&str>) -> Result<Vec<String>, Error> {
+        let templates_home: PathBuf = [Config::gedent_home()?, Into::into(TEMPLATES_DIR)]
+            .iter()
+            .collect();
+        let templates = Self::get_templates(&templates_home);
+
+        // Count how many software dirs each short name appears in.
+        let mut counts: HashMap<String, usize> = HashMap::new();
+        for t in &templates {
+            let short = t.split('/').next_back().unwrap_or(t).to_string();
+            *counts.entry(short).or_insert(0) += 1;
+        }
+
+        let mut names: Vec<String> = templates
+            .iter()
+            .flat_map(|t| {
+                let short = t.split('/').next_back().unwrap_or(t).to_string();
+                if counts[&short] == 1 {
+                    vec![short]
+                } else if software.is_some_and(|sw| t == &format!("{sw}/{short}")) {
+                    // Resolves unambiguously via configured software — offer
+                    // both the short name and the full names of the others.
+                    vec![short]
+                } else {
+                    vec![t.clone()]
+                }
+            })
+            .collect();
+        names.sort();
+        names.dedup();
+        Ok(names)
     }
 
     fn find_path(template: &str, software: Option<&str>) -> Result<PathBuf, Error> {

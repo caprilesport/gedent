@@ -73,6 +73,12 @@ struct Cli {
 }
 
 #[derive(Debug, Subcommand)]
+enum CompleteSubcommand {
+    /// List completable template names (one per line).
+    Templates,
+}
+
+#[derive(Debug, Subcommand)]
 #[allow(clippy::large_enum_variant)]
 enum Mode {
     /// Generate a new input based on a template
@@ -134,6 +140,13 @@ enum Mode {
     Template {
         #[command(subcommand)]
         template_subcommand: TemplateSubcommand,
+    },
+    /// Shell completion endpoint — hidden from normal help output.
+    /// `gedent __complete templates` prints one completable name per line.
+    #[command(hide = true)]
+    Complete {
+        #[command(subcommand)]
+        complete_subcommand: CompleteSubcommand,
     },
     // Subcommand for init gedent "repo"
     /// Initiate a gedent project in the current directory.
@@ -328,6 +341,17 @@ fn main() -> Result<()> {
                     mem,
                 },
             )?,
+
+            Mode::Complete {
+                complete_subcommand,
+            } => match complete_subcommand {
+                CompleteSubcommand::Templates => {
+                    let software = Config::get().ok().and_then(|c| c.gedent.software);
+                    for name in Template::list_names(software.as_deref())? {
+                        println!("{name}");
+                    }
+                }
+            },
         }
     }
 
