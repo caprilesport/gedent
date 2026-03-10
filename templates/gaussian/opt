@@ -17,4 +17,4 @@ description = "Geometry optimization and frequency"
 job title: {{ name }}
 
 {{ charge }} {{ mult }}
-{{ print_molecule(molecule=Molecule) }}
+{{ print_coords(molecule=Molecule) }}

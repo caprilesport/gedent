@@ -28,3 +28,8 @@ tera = "1"
 toml = "0.8.8"
 walkdir = "2.4.0"
 comfy-table = "7"
+strum = { version = "0.26", features = ["derive"] }
+average = "0.15"
+
+[dev-dependencies]
+approx = "0.5"

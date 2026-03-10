@@ -16,4 +16,4 @@ description = "Single point energy"
 job title: {{ name }}
 
 {{ charge }} {{ mult }}
-{{ print_molecule(molecule=Molecule) }}
+{{ print_coords(molecule=Molecule) }}

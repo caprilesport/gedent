@@ -3,7 +3,7 @@ extension = ""
 --@
  title "{{ molecule.filename }}"  
  geometry    
-{{ print_molecule(molecule=molecule) }}
+{{ print_coords(molecule=molecule) }}
  end  
  basis  
    n library {{ dft_basis_set }}  

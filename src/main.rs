@@ -13,6 +13,7 @@ use std::fs::{read_dir, write};
 use std::path::PathBuf;
 
 mod config;
+mod elements;
 mod molecule;
 mod template;
 

@@ -33,7 +33,7 @@ EndEngine
 
 System
 	atoms
-{{ print_molecule(molecule=Molecule) }}
+{{ print_coords(molecule=Molecule) }}
 	end
 		Charge {{ charge }}
 	end

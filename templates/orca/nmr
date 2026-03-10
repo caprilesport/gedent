@@ -13,7 +13,7 @@ end
 %maxcore {{ mem }}
 
 *xyz {{ charge }} {{ mult }}
-{{ print_molecule(molecule = Molecule) }}
+{{ print_coords(molecule = Molecule) }}
 *
 
 %EPRNMR

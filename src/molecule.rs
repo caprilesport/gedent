@@ -1,3 +1,4 @@
+use crate::elements::Element;
 use color_eyre::eyre::{eyre, Report as Error, Result, WrapErr};
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -6,7 +7,7 @@ use std::path::PathBuf;
 
 #[derive(PartialEq, Serialize, Deserialize, Debug, Clone)]
 pub struct Atom {
-    pub symbol: String,
+    pub element: Element,
     pub x: f64,
     pub y: f64,
     pub z: f64,
@@ -15,10 +16,11 @@ pub struct Atom {
 impl Atom {
     fn from_line(line: &str) -> Result<Self, Error> {
         let mut parts = line.split_whitespace();
-        let symbol = parts
+        let element = parts
             .next()
             .ok_or_else(|| eyre!("Missing element symbol"))?
-            .to_string();
+            .parse::<Element>()
+            .wrap_err("Unknown element symbol")?;
         let x = parts
             .next()
             .ok_or_else(|| eyre!("Missing x coordinate"))?
@@ -34,7 +36,7 @@ impl Atom {
             .ok_or_else(|| eyre!("Missing z coordinate"))?
             .parse::<f64>()
             .wrap_err("z coordinate is not a valid float")?;
-        Ok(Self { symbol, x, y, z })
+        Ok(Self { element, x, y, z })
     }
 }
 
@@ -43,7 +45,7 @@ impl fmt::Display for Atom {
         write!(
             f,
             "{:<4}{:14.8}{:14.8}{:14.8}",
-            self.symbol, self.x, self.y, self.z
+            self.element, self.x, self.y, self.z
         )
     }
 }
@@ -122,31 +124,31 @@ mod tests {
     fn ch4_atoms() -> Vec<Atom> {
         vec![
             Atom {
-                symbol: "C".to_string(),
+                element: Element::C,
                 x: -0.702_728_547,
                 y: 0.0,
                 z: -1.996_862_306,
             },
             Atom {
-                symbol: "H".to_string(),
+                element: Element::H,
                 x: -0.172_294_601,
                 y: -0.951_333_822,
                 z: -1.920_672_276,
             },
             Atom {
-                symbol: "H".to_string(),
+                element: Element::H,
                 x: 0.013_819_138,
                 y: 0.821_859_802,
                 z: -1.939_355_658,
             },
             Atom {
-                symbol: "H".to_string(),
+                element: Element::H,
                 x: -1.419_276_232,
                 y: 0.083_844_265,
                 z: -1.177_270_525,
             },
             Atom {
-                symbol: "H".to_string(),
+                element: Element::H,
                 x: -1.233_162_492,
                 y: 0.045_629_756,
                 z: -2.950_150_766,
@@ -182,5 +184,21 @@ mod tests {
         let input = "1\n\nC  0.0  0.0  0.0";
         let mol = Molecule::from_reader(Cursor::new(input)).unwrap();
         assert_eq!(mol.description, None);
+    }
+
+    #[test]
+    fn xyz_parse_unknown_element_errors() {
+        let input = "1\n\nXX  0.0  0.0  0.0";
+        assert!(
+            Molecule::from_reader(Cursor::new(input)).is_err(),
+            "Expected error for unknown element symbol"
+        );
+    }
+
+    #[test]
+    fn xyz_parse_case_insensitive_elements() {
+        let input = "1\n\nfe  0.0  0.0  0.0";
+        let mol = Molecule::from_reader(Cursor::new(input)).unwrap();
+        assert_eq!(mol.atoms[0].element, Element::Fe);
     }
 }

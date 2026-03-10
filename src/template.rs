@@ -60,7 +60,7 @@ impl Template {
 
     pub fn render(&self, context: &tera::Context) -> Result<String, Error> {
         let mut tera = Tera::default();
-        tera.register_function("print_molecule", print_molecule);
+        tera.register_function("print_coords", print_coords);
         tera.add_raw_template(&self.name, &self.body)?;
         Ok(tera.render(&self.name, context)?)
     }
@@ -317,19 +317,19 @@ pub fn missing_vars(context: &tera::Context, requires: &[String]) -> Vec<String>
 }
 
 // functions for the templates
-fn print_molecule(args: &HashMap<String, Value>) -> Result<Value, tera::Error> {
+fn print_coords(args: &HashMap<String, Value>) -> Result<Value, tera::Error> {
     let molecule: Molecule = match args.get("molecule") {
         Some(val) => match from_value(val.clone()) {
             Ok(v) => v,
             Err(_) => {
                 return Err(tera::Error::msg(format!(
-                    "Function `print_molecule` received an object of type {val}, not `Molecule`"
+                    "Function `print_coords` received an object of type {val}, not `Molecule`"
                 )));
             }
         },
         None => {
             return Err(tera::Error::msg(
-                "Function `print_molecule` didn't receive a `molecule` argument",
+                "Function `print_coords` didn't receive a `molecule` argument",
             ))
         }
     };
@@ -346,6 +346,7 @@ fn print_molecule(args: &HashMap<String, Value>) -> Result<Value, tera::Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::elements::Element;
     use toml::Value;
 
     #[test]
@@ -400,13 +401,13 @@ end
             description: None,
             atoms: vec![
                 Atom {
-                    symbol: "C".into(),
+                    element: Element::C,
                     x: 0.0,
                     y: 0.0,
                     z: 0.0,
                 },
                 Atom {
-                    symbol: "H".into(),
+                    element: Element::H,
                     x: 1.0,
                     y: 0.0,
                     z: 0.0,

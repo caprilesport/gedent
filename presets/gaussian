@@ -8,5 +8,5 @@ extension = "gjf"
 {{ molecule.filename }}
 
 {{ charge }} {{ mult }}
-{{ print_molecule(molecule=molecule) }}
+{{ print_coords(molecule=molecule) }}
 

@@ -186,7 +186,7 @@ templates.
 following fields: `filename`, `description`, and `atoms`. On top of the already
 built-in tera [functions](https://keats.github.io/tera/docs/#built-in-functions)
 and [filters](https://keats.github.io/tera/docs/#built-in-filters) two
-additional functions that receive a Molecule are provided, `print_molecule` and
+additional functions that receive a Molecule are provided, `print_coords` and
 `split_molecule`.
 
 Example `Molecule` object fields:
@@ -228,7 +228,7 @@ optimizing a water molecule with [Orca](https://www.faccts.de/orca/).
    %maxcore {{ memory }}
 
    *xyz {{ charge }} {{ mult }}
-   {{ print_molecule(molecule = Molecule) }}
+   {{ print_coords(molecule = Molecule) }}
    *
    ```
 
