@@ -102,6 +102,35 @@ headers as a blank slate. The cascade handles the rest.
 
 ### 4c. Improve abstractions / domain model — split `generate_input`
 **Status:** done
+
+### 4d. Split `[chemistry]` into `[model]` and `[resources]`
+**Status:** not started
+`[chemistry]` conflates two semantically distinct concerns:
+- `[model]` — what the calculation *is*: `method`, `basis_set`, `charge`, `mult`,
+  `dispersion`, `solvent`, `solvation_model`. Changes per-project, per-directory.
+  Subject to method compatibility validation (item 19).
+- `[resources]` — what machine it runs on: `nprocs`, `mem`. Future: `use_gpu`,
+  `scratch_dir`. Changes per-machine or per-cluster, rarely per-calculation.
+
+```toml
+[model]
+method = "pbe0"
+basis_set = "def2-tzvp"
+charge = 0
+mult = 1
+dispersion = "d3bj"
+solvent = "water"
+solvation_model = "cpcm"
+
+[resources]
+nprocs = 20
+mem = 3000
+```
+
+The validation pipeline (item 17) acts on these groups differently: charge/mult
+parity is a `[model]` concern, `nprocs` sanity is a `[resources]` concern.
+Tera context variable names (`{{ nprocs }}`, `{{ method }}`) do not change —
+only the config file structure and Rust structs change. Do before item 17.
 Depends on items 4 and 4b. With `[chemistry]` as a typed struct and the cascade
 in place, split `generate_input` into focused pieces:
 - `build_context(chemistry: &ChemistryConfig, params: &ParamsMap, opts: &GenOptions) -> tera::Context`
@@ -156,10 +185,69 @@ to an xtask crate (or a simple install subcommand backed by xtask). This also
 makes it easier to update defaults without recompiling.
 
 ### 10. Template organization
-**Status:** no solution yet
-A flat directory that the user must know the path of is bad UX. Options include
-organizing by software, by calculation type, or adding lightweight metadata.
-Revisit once the domain model and template format are stable.
+**Status:** in progress
+Design settled. Implementation items:
+
+**a. `software/jobtype` directory convention**
+Templates live at `~/.config/gedent/templates/software/jobtype`, e.g.
+`templates/orca/sp`, `templates/xtb/gfn2`. This is a storage convention only —
+not the user-facing name in normal use.
+
+**b. Tera comment frontmatter**
+Each template declares its interface in a `{# ... #}` block (stripped at render
+time, zero leakage into output):
+```
+{#
+software = "orca"
+jobtype = "sp"
+requires = ["method", "basis_set", "charge", "mult", "nprocs", "mem"]
+description = "Single point energy"
+#}
+! {{ method }} {{ basis_set }}
+...
+```
+Only the first `{# ... #}` block is treated as frontmatter if it parses as valid
+TOML. Templates without frontmatter still work — metadata is absent, validation
+skips gracefully. `requires` is used by the validation pipeline (item 17) to
+check for missing variables before rendering.
+
+**c. `software` key in `[gedent]` config**
+Optional. Used as tiebreaker when short-name lookup is ambiguous. Does **not**
+participate in the cascade — it is a project-level declaration, not a key that
+should be inherited and silently applied from a parent directory.
+
+```toml
+[gedent]
+software = "orca"
+default_extension = "inp"
+```
+
+**d. Short-name lookup with disambiguation**
+```
+gedent gen sp mol.xyz
+  1. scan templates/*/sp
+  2. one match  → use it
+  3. no match   → error: no template named "sp"
+  4. >1 match   → check gedent.software as tiebreaker
+  5. still ambiguous → error: ambiguous: orca/sp, xtb/sp
+                        hint: use full name or set software in gedent.toml
+```
+Full names (`gedent gen orca/sp`) always resolve directly, bypassing lookup.
+Multi-software projects work naturally: `xtb/gfn2` and `crest/conformers` are
+unambiguous by default; collisions (e.g. `orca/opt` vs `xtb/opt`) are resolved
+by setting `software` in the project or subdirectory `gedent.toml`.
+
+**e. Dynamic shell completion**
+`gedent template list` outputs one short name per line (already does this).
+Generated completion scripts are patched to call `gedent template list` for the
+`template_name` argument in `gedent gen`. A hidden `gedent __complete templates`
+subcommand provides a shell-friendly completion endpoint.
+
+**f. Software database**
+Software-level metadata (default extension, compatible solvation models, etc.)
+lives in `~/.config/gedent/software.toml`, extracted by `--set-up`. User-editable
+so users can add custom software or update entries when software adds new features
+(e.g. XTB gaining CPCM support). Not embedded in the binary. See also item 19.
 
 ---
 
@@ -277,9 +365,17 @@ just empty.
 Two sub-problems:
 
 **1. Composite/semiempirical methods in context building**
-A data-driven method database (TOML, shipped with gedent and user-extensible)
-that describes method properties:
+A data-driven method + software database in `~/.config/gedent/software.toml`
+(extracted by `--set-up`, user-editable, not embedded in binary):
 ```toml
+[software.orca]
+extension = "inp"
+solvation_models = ["CPCM", "SMD", "COSMO"]
+
+[software.xtb]
+extension = "inp"
+solvation_models = ["ALPB", "GBSA"]
+
 [methods.pbeh-3c]
 has_own_basis = true
 has_own_dispersion = true
@@ -288,12 +384,10 @@ kind = "composite"
 [methods.xtb]
 kind = "semiempirical"
 has_own_basis = true
-compatible_solvation = ["ALPB"]
 
 [methods.pbe0]
 kind = "dft"
 requires_basis = true
-compatible_solvation = ["CPCM", "SMD", "COSMO"]
 ```
 The context builder uses these properties to decide what variables to populate.
 Templates should use `{% if basis_set is defined %}` for conditionally present
@@ -304,11 +398,11 @@ responsible for picking the right template.
 **2. Method × software × solvation compatibility validation**
 Cross-product constraints like "XTB in ORCA must use ALPB, not CPCM" are
 validation rules, not type-level constraints. These belong in the validation
-pipeline (item 15) as `check_solvation_compatibility(method, software,
+pipeline (item 17) as `check_solvation_compatibility(method, software,
 solvation_model)` with a `.suggestion()` via color_eyre pointing to the correct
 solvation model.
 
-This item is closely related to the workflow layer (item 18) — once method
+This item is closely related to the workflow layer (item 20) — once method
 metadata exists, workflows can use it to pre-validate and auto-configure
 calculations rather than relying purely on user-provided variables.
 
@@ -331,7 +425,23 @@ Current tests only cover happy paths for individual units. Needed:
 - Integration tests (invoke the CLI, check output files)
 - Property-based tests for the parser once the atom struct is in place
 
-### 22. Documentation
+### 22. Logging
+**Status:** not started
+Replace ad-hoc `println!` progress output with structured logging.
+Stack: `log` crate (facade) + `env_logger` (backend) + `clap_verbosity_flag`
+(CLI flags). `clap_verbosity_flag` adds `-v`/`-vv`/`-q` to the top-level CLI
+and maps directly to `log::LevelFilter` — no glue code needed.
+
+Default level: warn (silent on success). With `-v`: info (show "Writing foo.inp",
+"Created gedent.toml." etc.). With `-vv`: debug (config chain, context keys,
+template resolution steps). Error output stays on stderr via color_eyre.
+
+Migration: replace `println!` progress calls with `log::info!`, add
+`env_logger::Builder::new().filter_level(verbosity.log_level_filter()).init()`
+in `main`. `tracing` is intentionally not used — it is designed for async and
+distributed systems and is overkill for a synchronous CLI.
+
+### 24. Documentation
 **Status:** inadequate
 - Add rustdoc to all public types and functions
 - Expand the README with real usage examples and template authoring guide
