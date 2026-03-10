@@ -167,28 +167,6 @@ enum ConfigSubcommand {
         #[arg(short, long, default_value_t = false)]
         location: bool,
     },
-    /// Sets key to value in the config file, keeps the same type as was setted.
-    Set {
-        /// Key to set
-        key: String,
-        /// Value to assign
-        value: String,
-    },
-    /// Adds a key, value to the config file, for typed values use an option
-    Add {
-        /// Key to be added
-        key: String,
-        /// Value associated with key, can be a string, int, float or bool. Default is string.
-        value: String,
-        /// Sets the type of the value in the config file
-        #[arg(short, long, default_value = "string")]
-        toml_type: crate::config::ArgType,
-    },
-    /// Deletes a certain key in the configuration
-    Del {
-        /// Key to be deleted.
-        key: String,
-    },
     /// Opens the currently used config file in your default editor.
     Edit {},
 }
@@ -264,25 +242,6 @@ fn main() -> Result<()> {
                 ConfigSubcommand::Print { location } => {
                     let config = Config::get()?;
                     config.print(location)?;
-                }
-                ConfigSubcommand::Set { key, value } => {
-                    let mut config = Config::get()?;
-                    config.set(&key, value)?;
-                    config.write()?;
-                }
-                ConfigSubcommand::Add {
-                    key,
-                    value,
-                    toml_type,
-                } => {
-                    let mut config = Config::get()?;
-                    config.add(key, value, toml_type)?;
-                    config.write()?;
-                }
-                ConfigSubcommand::Del { key } => {
-                    let mut config = Config::get()?;
-                    config.delete(&key)?;
-                    config.write()?;
                 }
                 ConfigSubcommand::Edit {} => Config::edit()?,
             },
