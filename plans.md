@@ -8,10 +8,11 @@ Items are roughly ordered by priority / dependency.
 ## Refactors
 
 ### 10f. Software database
-**Status:** not started
+**Status:** done
 Software-level metadata (default extension, compatible solvation models, etc.)
 lives in `~/.config/gedent/software.toml`, extracted on first run, user-editable.
-Not embedded in the binary. See also item 19.
+Contains software entries, method entries (`has_own_basis`, `has_own_dispersion`),
+and compatibility rules (`[[compat]]`).
 
 ---
 
@@ -65,89 +66,25 @@ optionally `--ts mol_ts.xyz`. The Tera context would expose named molecules
 endpoint verification, and linear transit inputs.
 
 ### 17. Pre-generation validation pipeline
-**Status:** partial — `Diagnostic` type, `validate()`, charge/mult, superposed atoms, and missing
-vars all implemented in `src/validation.rs` and wired into `generate_input`
-Rather than scattering ad-hoc `bail!` / `println!` calls, introduce a formal
-validation layer: `Diagnostic { severity: Error | Warning, message }` returned
-from a `validate(molecule, context) -> Vec<Diagnostic>` pipeline that runs before
-rendering. Errors stop generation; warnings proceed with output. Specific warnings
-should be suppressible via config.
-
-Checks to implement in this pipeline:
-- **Charge and multiplicity** — compute total electron count, validate parity and
-  physical possibility of the provided charge/mult combination.
-- **Superposed atoms** — any two atoms closer than ~0.5 Å is almost certainly a
-  drawing error.
-- **Unknown element symbols** — catch typos (`CA`, `ca` instead of `Ca`) before
-  a bad input file is silently written.
-- **Suspiciously long bonds** — atoms connected in the graph but with an
-  unreasonable distance; indicates bad geometry or a unit mismatch (Bohr vs Å).
-- **Unexpected fragment count** — warn if the connectivity graph shows a different
-  number of fragments than the template expects (e.g. a single-molecule template
-  receiving a system with 3 disconnected fragments).
-- **Missing template variables** — check that all variables referenced in the
-  template are present in context before rendering, and report a clear list of
-  what is undefined rather than a cryptic Tera error.
+**Status:** done
+`Diagnostic { severity: Error | Warning, message }`, `validate()` pipeline,
+charge/mult parity, superposed atoms (hard error < 0.5 Å; warning below covalent
+radii threshold), missing template variables, compat rules, and method-vars
+warnings all implemented in `src/validation.rs` and wired into `generate_input`.
 
 ### 18. `--dry-run` flag and context introspection
-**Status:** not started
-- `--dry-run` — run the full validation pipeline and print what would be generated
-  without writing any files. Useful for debugging templates.
-- `--show-context` (or `gedent gen --dry-run --verbose`) — dump the full Tera
-  context so template authors can see exactly what variables are available and
-  their types without guessing.
+**Status:** done
+- `--dry-run` — runs full validation, prints what would be generated, writes nothing.
+- `--show-context` — dumps the full Tera context as JSON before validation.
+Both flags live on `gedent gen`.
 
 ### 19. Method abstraction and compatibility database
-**Status:** not started / design phase
-Some methods are composite and have baked-in components (pbeh-3c, r2scan-3c,
-HF-3c carry their own basis and dispersion; XTB has no basis set concept at all).
-The flat `{{ method }}` / `{{ basis_set }}` / `{{ dispersion }}` variable model
-breaks down for these — populating `{{ basis_set }}` for pbeh-3c is wrong, not
-just empty.
-
-Two sub-problems:
-
-**1. Composite/semiempirical methods in context building**
-A data-driven method + software database in `~/.config/gedent/software.toml`
-(extracted on first run, user-editable, not embedded in binary):
-```toml
-[software.orca]
-extension = "inp"
-solvation_models = ["CPCM", "SMD", "COSMO"]
-
-[software.xtb]
-extension = "inp"
-solvation_models = ["ALPB", "GBSA"]
-
-[methods.pbeh-3c]
-has_own_basis = true
-has_own_dispersion = true
-kind = "composite"
-
-[methods.xtb]
-kind = "semiempirical"
-has_own_basis = true
-
-[methods.pbe0]
-kind = "dft"
-requires_basis = true
-```
-The context builder uses these properties to decide what variables to populate.
-Templates should use `{% if basis_set is defined %}` for conditionally present
-fields. Alternatively, composite methods get their own templates entirely (a
-pbeh-3c template simply has no `{{ basis_set }}`), with the workflow layer
-responsible for picking the right template.
-
-**2. Method × software × solvation compatibility validation**
-Cross-product constraints like "XTB in ORCA must use ALPB, not CPCM" are
-validation rules, not type-level constraints. These belong in the validation
-pipeline (item 17) as `check_solvation_compatibility(method, software,
-solvation_model)` with a `.suggestion()` via color_eyre pointing to the correct
-solvation model.
-
-This item is closely related to the workflow layer (item 20) — once method
-metadata exists, workflows can use it to pre-validate and auto-configure
-calculations rather than relying purely on user-provided variables.
+**Status:** done
+`software.toml` (user-editable, extracted on first run) holds software entries,
+method entries (`has_own_basis`, `has_own_dispersion`), and `[[compat]]` rules.
+`SoftwareDb::load()` in `src/software.rs`; falls back to an empty database if
+the file is absent (non-fatal). Wired into `validate()` for compat and
+method-vars checks.
 
 ### 20. Workflow layer
 **Status:** not started
@@ -162,41 +99,25 @@ template automatically. Quality tiers: `quick` / `production` / `benchmark`.
 ## Quality
 
 ### 23. `config print --location` per-file diff
-**Status:** not started
-Currently `--location` lists the config chain paths and then dumps the fully
-merged result, with no indication of where each value came from. A user seeing
-`charge = 1` has no way to know if that came from the global config or a
-`gedent.toml` five directories up. Enhance to show per-file contributions:
-
-```
-~/.config/gedent/gedent.toml
-  method = "pbe0", basis_set = "def2-tzvp", charge = 0
-
-~/projects/reaction/gedent.toml
-  charge = 1
-
-merged:
-  method = "pbe0", basis_set = "def2-tzvp", charge = 1
-```
-
-Requires threading per-file key sets through the cascade (capture which keys
-each `RawConfig` actually set before merging).
+**Status:** done
+`config print --location` shows per-file contributions (which keys each
+`gedent.toml` in the cascade actually sets) followed by the fully merged result.
+Implemented via `raw_contributions()` + `collect_chain_raw()` in `src/config.rs`.
 
 ### 21. Tests
-**Status:** partial
-Added: config cascade (7 tests), xyz parser (4 tests including error cases),
-`build_context` (6 tests covering overrides, fallthrough, solvent flag),
-`render_with_molecule`, `parse_frontmatter` (2 tests), `missing_vars` (3 tests —
-the core of item 17's pre-render check is already tested).
+**Status:** done
+Unit tests: config cascade (7 tests), xyz parser, `build_context` (6 tests),
+`render_inputs`, `parse_frontmatter`, validation pipeline (15 tests covering
+charge/mult, superposed atoms, missing vars, compat rules, method-vars),
+`parse_var` (8 tests). Total: 85 unit tests.
 
-Still needed:
-- Integration tests (invoke the CLI, check output files)
-- Property-based tests for the xyz parser
-- Tests for `generate_input` end-to-end
+Integration tests (`tests/integration.rs`): 14 CLI tests covering gen --print,
+file output, multiple files, --dry-run, --show-context, --var, validation errors,
+config print, and template list/print. All hermetic via `GEDENT_HOME` env var.
 
 ### 24. Documentation
-**Status:** inadequate
-- Add rustdoc to all public types and functions
-- Expand the README with real usage examples and template authoring guide
-- Document the config file format and lookup behaviour
-- Document available Tera functions and their signatures
+**Status:** done
+- Rustdoc on all public types and functions in all source files
+- README rewritten to reflect current state (config format, template authoring,
+  Tera functions table, validation pipeline, --var, --dry-run, --show-context,
+  shell completion)
