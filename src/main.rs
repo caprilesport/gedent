@@ -15,6 +15,7 @@ use std::path::PathBuf;
 mod config;
 mod elements;
 mod molecule;
+mod software;
 mod template;
 mod validation;
 
@@ -24,6 +25,7 @@ const TEMPLATES_DIR: &str = "templates";
 static INCLUDE_PRESETS_DIR: Dir = include_dir!("presets");
 static INCLUDE_TEMPLATES_DIR: Dir = include_dir!("templates");
 static GEDENT_CONFIG: &str = include_str!("../gedent.toml");
+static GEDENT_SOFTWARE: &str = include_str!("../software.toml");
 
 #[derive(Debug, Default)]
 struct GenOptions {
@@ -502,6 +504,13 @@ fn setup_gedent() -> Result<(), Error> {
             std::fs::write(&config_path, GEDENT_CONFIG)
                 .wrap_err("Failed to create gedent config.")?;
 
+            info!("Creating software.toml.");
+            let software_path: PathBuf = [config_dir.clone(), Into::into("software.toml")]
+                .iter()
+                .collect();
+            std::fs::write(&software_path, GEDENT_SOFTWARE)
+                .wrap_err("Failed to create software database.")?;
+
             info!("Generating presets.");
             let presets: PathBuf = [config_dir.clone(), Into::into(PRESETS_DIR)]
                 .iter()
@@ -723,11 +732,13 @@ fn generate_input(
         .as_ref()
         .unwrap_or(&config.gedent.default_extension);
 
+    let db = software::SoftwareDb::load().unwrap_or_default();
+
     // Run validation on all inputs before rendering anything, so the user
     // sees every problem at once rather than one per run.
     let mut has_errors = false;
     if molecules.is_empty() {
-        for d in validation::validate(None, &context, &template.meta.requires) {
+        for d in validation::validate(None, &context, &template.meta.requires, &db, software) {
             emit_diagnostic(&template.name, &d);
             if d.severity == validation::Severity::Error {
                 has_errors = true;
@@ -738,7 +749,13 @@ fn generate_input(
             let name = path
                 .file_stem()
                 .map_or_else(|| path.to_string_lossy(), |s| s.to_string_lossy());
-            for d in validation::validate(Some(molecule), &context, &template.meta.requires) {
+            for d in validation::validate(
+                Some(molecule),
+                &context,
+                &template.meta.requires,
+                &db,
+                software,
+            ) {
                 emit_diagnostic(&name, &d);
                 if d.severity == validation::Severity::Error {
                     has_errors = true;

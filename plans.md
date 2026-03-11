@@ -33,28 +33,6 @@ Note: `Molecule.description` is xyz-specific. As more formats are added, conside
 replacing it with `metadata: HashMap<String, String>` populated by each parser,
 or dropping it entirely since it rarely contains anything useful.
 
-### 12. Basic Tera template functions
-**Status:** done — natoms, count_element, element_list, atom_symbol, atom_coords implemented
-Useful functions:
-- `natoms(molecule)` — total atom count
-- `count_element(molecule, symbol)` — count atoms of a given element
-- `element_list(molecule)` — unique elements present
-- `center_of_mass(molecule)` — may be useful for some inputs
-- `atom_symbol(molecule, i)` / `atom_coords(molecule, i)` — indexed accessors,
-  useful for writing frozen atom blocks or geometry constraints
-- `nuclear_repulsion(molecule)` — occasionally required in input files as a
-  reference energy
-
-### 13. Geometric measurements in templates
-**Status:** done — single measure(molecule, atoms) function: 2 indices→distance, 3→angle, 4→dihedral; 1-based indexing throughout
-Expose as Tera functions so templates can embed computed
-geometry directly in input files:
-- `distance(molecule, i, j)` — bond length between atoms i and j
-- `angle(molecule, i, j, k)` — valence angle
-- `dihedral(molecule, i, j, k, l)` — torsion angle
-Useful for constrained optimizations, scan inputs, and anything that needs
-explicit internal coordinates.
-
 ### 14. Molecule connectivity graph
 **Status:** not started
 Depends on item 1. Build a bond graph from covalent radii + distance threshold

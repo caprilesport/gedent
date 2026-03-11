@@ -1,0 +1,47 @@
+# gedent software database
+# Defines known software, methods, and compatibility rules.
+# Add your own entries - they are picked up automatically.
+
+[software.orca]
+extension = "inp"
+solvation_models = ["cpcm", "smd", "alpb", "cosmo"]
+
+[software.gaussian]
+extension = "gjf"
+solvation_models = ["smd", "pcm", "cpcm"]
+
+[software.xtb]
+extension = "inp"
+solvation_models = ["alpb", "gbsa"]
+
+# Composite methods carry their own basis set and dispersion correction.
+# If these are present in your config, they will be ignored by the template.
+[methods."pbeh-3c"]
+has_own_basis = true
+has_own_dispersion = true
+
+[methods."r2scan-3c"]
+has_own_basis = true
+has_own_dispersion = true
+
+[methods."hf-3c"]
+has_own_basis = true
+has_own_dispersion = true
+
+[methods."b97-3c"]
+has_own_basis = true
+has_own_dispersion = true
+
+[methods.xtb]
+has_own_basis = true
+has_own_dispersion = true
+
+# Compatibility rules.
+# Each rule matches on method and/or software and enforces constraints.
+# Supported actions:
+#   require_solvation_model = "model"  — solvation_model must equal this value when solvation is active
+[[compat]]
+method = "xtb"
+software = "orca"
+require_solvation_model = "alpb"
+message = "XTB in ORCA requires ALPB solvation; set solvation_model = \"alpb\" in your config"

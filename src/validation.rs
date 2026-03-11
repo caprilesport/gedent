@@ -1,10 +1,10 @@
 use crate::molecule::Molecule;
+use crate::software::SoftwareDb;
 use std::fmt;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Severity {
     Error,
-    #[allow(dead_code)] // warnings not yet generated but the variant is part of the public API
     Warning,
 }
 
@@ -22,7 +22,6 @@ impl Diagnostic {
         }
     }
 
-    #[allow(dead_code)] // not yet generated but part of the public API
     pub fn warning(message: impl Into<String>) -> Self {
         Self {
             severity: Severity::Warning,
@@ -43,10 +42,13 @@ impl fmt::Display for Diagnostic {
 
 /// Run all validation checks. Molecule-specific checks are skipped when
 /// `molecule` is `None` (i.e. the no-molecule generation path).
+/// `software` is the resolved software name (from config/opts), may be `None`.
 pub fn validate(
     molecule: Option<&Molecule>,
     context: &tera::Context,
     requires: &[String],
+    db: &SoftwareDb,
+    software: Option<&str>,
 ) -> Vec<Diagnostic> {
     let mut diags = vec![];
     if let Some(mol) = molecule {
@@ -54,6 +56,8 @@ pub fn validate(
         diags.extend(check_charge_mult(mol, context));
     }
     diags.extend(check_missing_vars(context, requires));
+    diags.extend(check_compat(context, db, software));
+    diags.extend(check_method_vars(context, db));
     diags
 }
 
@@ -107,7 +111,9 @@ fn check_charge_mult(molecule: &Molecule, context: &tera::Context) -> Vec<Diagno
 }
 
 fn check_superposed_atoms(molecule: &Molecule) -> Vec<Diagnostic> {
-    const THRESHOLD: f64 = 0.5; // Å
+    const ERROR_THRESHOLD: f64 = 0.5; // Å — definitely same point
+    const RADII_FACTOR: f64 = 0.5; // fraction of sum of covalent radii
+
     let mut diags = vec![];
     let atoms = &molecule.atoms;
     for i in 0..atoms.len() {
@@ -116,7 +122,8 @@ fn check_superposed_atoms(molecule: &Molecule) -> Vec<Diagnostic> {
             let dy = atoms[i].y - atoms[j].y;
             let dz = atoms[i].z - atoms[j].z;
             let dist = dz.mul_add(dz, dx.mul_add(dx, dy * dy)).sqrt();
-            if dist < THRESHOLD {
+
+            if dist < ERROR_THRESHOLD {
                 diags.push(Diagnostic::error(format!(
                     "atoms {} ({}) and {} ({}) are superposed: distance {dist:.3} Å",
                     i + 1,
@@ -124,6 +131,23 @@ fn check_superposed_atoms(molecule: &Molecule) -> Vec<Diagnostic> {
                     j + 1,
                     atoms[j].element,
                 )));
+            } else {
+                let ri = atoms[i].element.get_radius().map(f64::from);
+                let rj = atoms[j].element.get_radius().map(f64::from);
+                if let (Some(ri), Some(rj)) = (ri, rj) {
+                    let threshold = RADII_FACTOR * (ri + rj);
+                    if dist < threshold {
+                        diags.push(Diagnostic::warning(format!(
+                            "atoms {} ({}) and {} ({}) are unusually close: \
+                             {dist:.3} Å (sum of covalent radii = {:.3} Å)",
+                            i + 1,
+                            atoms[i].element,
+                            j + 1,
+                            atoms[j].element,
+                            ri + rj,
+                        )));
+                    }
+                }
             }
         }
     }
@@ -141,6 +165,86 @@ fn check_missing_vars(context: &tera::Context, requires: &[String]) -> Vec<Diagn
             ))
         })
         .collect()
+}
+
+fn check_compat(
+    context: &tera::Context,
+    db: &SoftwareDb,
+    software: Option<&str>,
+) -> Vec<Diagnostic> {
+    let json = context.clone().into_json();
+    let method = json
+        .get("method")
+        .and_then(|v| v.as_str())
+        .map(str::to_lowercase);
+    let solvation = json
+        .get("solvation")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+    let solvation_model = json
+        .get("solvation_model")
+        .and_then(|v| v.as_str())
+        .map(str::to_lowercase);
+
+    let mut diags = vec![];
+
+    for rule in &db.compat {
+        let method_matches = rule.method.as_deref().map_or(true, |rm| {
+            method.as_deref() == Some(rm.to_lowercase().as_str())
+        });
+        let software_matches = rule.software.as_deref().map_or(true, |rs| {
+            software.is_some_and(|s| s.to_lowercase() == rs.to_lowercase())
+        });
+
+        if !method_matches || !software_matches {
+            continue;
+        }
+
+        if let Some(required_model) = &rule.require_solvation_model {
+            if solvation {
+                let model_ok = solvation_model
+                    .as_deref()
+                    .is_some_and(|m| m == required_model.to_lowercase().as_str());
+                if !model_ok {
+                    let msg = rule.message.as_deref().unwrap_or(
+                        "incompatible solvation model for this method/software combination",
+                    );
+                    diags.push(Diagnostic::error(msg));
+                }
+            }
+        }
+    }
+
+    diags
+}
+
+fn check_method_vars(context: &tera::Context, db: &SoftwareDb) -> Vec<Diagnostic> {
+    let json = context.clone().into_json();
+    let method_str = match json.get("method").and_then(|v| v.as_str()) {
+        Some(m) => m.to_owned(),
+        None => return vec![],
+    };
+
+    let Some(entry) = db.get_method(&method_str) else {
+        return vec![];
+    };
+
+    let mut diags = vec![];
+
+    if entry.has_own_basis && json.get("basis_set").is_some() {
+        diags.push(Diagnostic::warning(format!(
+            "{method_str} has its own basis set; \
+             configured basis_set will be ignored by the template"
+        )));
+    }
+    if entry.has_own_dispersion && json.get("dispersion").is_some() {
+        diags.push(Diagnostic::warning(format!(
+            "{method_str} has its own dispersion correction; \
+             configured dispersion will be ignored by the template"
+        )));
+    }
+
+    diags
 }
 
 #[cfg(test)]
@@ -165,6 +269,10 @@ mod tests {
             ctx.insert(*k, v);
         }
         ctx
+    }
+
+    fn empty_db() -> SoftwareDb {
+        SoftwareDb::default()
     }
 
     // ── charge/mult ────────────────────────────────────────────────────────────
@@ -204,11 +312,8 @@ mod tests {
 
     #[test]
     fn charge_mult_wrong_parity() {
-        // CH: 6+1 = 7 electrons, charge=0, mult=2 → (7-1)=6, 6%2==0 actually ok
-        // Use H (1 electron), mult=2 would be ok. Use mult=1 for mismatch: (1-0)%2 != 0
+        // H (1 electron), mult=1 → unpaired=0, (1-0)%2!=0 → error
         let mol = make_molecule(vec![(Element::H, 0.0, 0.0, 0.0)]);
-        // 1 electron, mult=2 → unpaired=1, (1-1)%2==0 → ok
-        // 1 electron, mult=1 → unpaired=0, (1-0)%2!=0 → error
         let diags = check_charge_mult(&mol, &ctx_with_ints(&[("charge", 0), ("mult", 1)]));
         assert_eq!(diags.len(), 1);
         assert_eq!(diags[0].severity, Severity::Error);
@@ -261,6 +366,23 @@ mod tests {
         assert_eq!(check_superposed_atoms(&mol).len(), 3);
     }
 
+    #[test]
+    fn superposed_atoms_warns_on_radii_clash() {
+        // H covalent radius = 0.31 Å; threshold = 0.5 * (0.31 + 0.31) = 0.31 Å
+        // Distance 0.25 Å: above 0.5 hard threshold but below 0.31 radii threshold
+        // Wait, 0.25 < 0.5 so this would be an error, not a warning.
+        // Use dist = 0.52 Å (above 0.5 error threshold, below radii threshold for C-C):
+        // C radius = 0.77 Å; threshold = 0.5 * (0.77 + 0.77) = 0.77 Å
+        // 0.52 > 0.5 → not an error; 0.52 < 0.77 → warning
+        let mol = make_molecule(vec![
+            (Element::C, 0.0, 0.0, 0.0),
+            (Element::C, 0.52, 0.0, 0.0),
+        ]);
+        let diags = check_superposed_atoms(&mol);
+        assert_eq!(diags.len(), 1);
+        assert_eq!(diags[0].severity, Severity::Warning);
+    }
+
     // ── missing vars ───────────────────────────────────────────────────────────
 
     #[test]
@@ -289,6 +411,88 @@ mod tests {
         assert!(check_missing_vars(&tera::Context::new(), &[]).is_empty());
     }
 
+    // ── check_compat ───────────────────────────────────────────────────────────
+
+    #[test]
+    fn compat_xtb_orca_no_solvation_ok() {
+        // Rule fires only when solvation is active
+        let mut db = SoftwareDb::default();
+        db.compat.push(crate::software::CompatRule {
+            method: Some("xtb".into()),
+            software: Some("orca".into()),
+            require_solvation_model: Some("alpb".into()),
+            message: None,
+        });
+        let mut ctx = tera::Context::new();
+        ctx.insert("method", "xtb");
+        // no solvation
+        assert!(check_compat(&ctx, &db, Some("orca")).is_empty());
+    }
+
+    #[test]
+    fn compat_xtb_orca_wrong_model_errors() {
+        let mut db = SoftwareDb::default();
+        db.compat.push(crate::software::CompatRule {
+            method: Some("xtb".into()),
+            software: Some("orca".into()),
+            require_solvation_model: Some("alpb".into()),
+            message: Some("XTB in ORCA requires ALPB".into()),
+        });
+        let mut ctx = tera::Context::new();
+        ctx.insert("method", "xtb");
+        ctx.insert("solvation", &true);
+        ctx.insert("solvation_model", "cpcm");
+        let diags = check_compat(&ctx, &db, Some("orca"));
+        assert_eq!(diags.len(), 1);
+        assert_eq!(diags[0].severity, Severity::Error);
+        assert!(diags[0].message.contains("ALPB"));
+    }
+
+    #[test]
+    fn compat_xtb_orca_correct_model_ok() {
+        let mut db = SoftwareDb::default();
+        db.compat.push(crate::software::CompatRule {
+            method: Some("xtb".into()),
+            software: Some("orca".into()),
+            require_solvation_model: Some("alpb".into()),
+            message: None,
+        });
+        let mut ctx = tera::Context::new();
+        ctx.insert("method", "xtb");
+        ctx.insert("solvation", &true);
+        ctx.insert("solvation_model", "alpb");
+        assert!(check_compat(&ctx, &db, Some("orca")).is_empty());
+    }
+
+    // ── check_method_vars ──────────────────────────────────────────────────────
+
+    #[test]
+    fn method_vars_warns_on_own_basis() {
+        let mut db = SoftwareDb::default();
+        db.methods.insert(
+            "pbeh-3c".into(),
+            crate::software::MethodEntry {
+                has_own_basis: true,
+                has_own_dispersion: false,
+            },
+        );
+        let mut ctx = tera::Context::new();
+        ctx.insert("method", "pbeh-3c");
+        ctx.insert("basis_set", "def2-tzvp");
+        let diags = check_method_vars(&ctx, &db);
+        assert_eq!(diags.len(), 1);
+        assert_eq!(diags[0].severity, Severity::Warning);
+        assert!(diags[0].message.contains("basis_set"));
+    }
+
+    #[test]
+    fn method_vars_silent_when_unknown_method() {
+        let mut ctx = tera::Context::new();
+        ctx.insert("method", "pbe0");
+        ctx.insert("basis_set", "def2-tzvp");
+        assert!(check_method_vars(&ctx, &empty_db()).is_empty());
+    }
+
     // ── validate (integration) ─────────────────────────────────────────────────
 
     #[test]
@@ -298,11 +502,10 @@ mod tests {
             (Element::H, 0.0, 0.0, 0.0),
             (Element::H, 0.0, 0.0, 0.0), // superposed
         ]);
-        // 2 electrons, charge=0, mult=1 → (2-0)%2==0 → actually valid
-        // Use mult=2 → (2-1)=1 unpaired, (2-1)%2 != 0 → parity error
+        // 2 electrons, charge=0, mult=2 → (2-1)=1 unpaired, (2-1)%2 != 0 → parity error
         let ctx = ctx_with_ints(&[("charge", 0), ("mult", 2)]);
         let requires = vec!["basis_set".to_string()];
-        let diags = validate(Some(&mol), &ctx, &requires);
+        let diags = validate(Some(&mol), &ctx, &requires, &empty_db(), None);
         // superposed(1) + charge/mult parity(1) + missing basis_set(1) = 3
         assert_eq!(diags.len(), 3);
         assert!(diags.iter().all(|d| d.severity == Severity::Error));
@@ -311,7 +514,7 @@ mod tests {
     #[test]
     fn validate_no_molecule_skips_geometry_checks() {
         let requires = vec!["method".to_string()];
-        let diags = validate(None, &tera::Context::new(), &requires);
+        let diags = validate(None, &tera::Context::new(), &requires, &empty_db(), None);
         assert_eq!(diags.len(), 1);
         assert!(diags[0].message.contains("method"));
     }
