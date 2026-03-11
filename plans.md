@@ -87,7 +87,8 @@ optionally `--ts mol_ts.xyz`. The Tera context would expose named molecules
 endpoint verification, and linear transit inputs.
 
 ### 17. Pre-generation validation pipeline
-**Status:** partial — unknown element symbols already caught at parse time via `Element` type
+**Status:** partial — `Diagnostic` type, `validate()`, charge/mult, superposed atoms, and missing
+vars all implemented in `src/validation.rs` and wired into `generate_input`
 Rather than scattering ad-hoc `bail!` / `println!` calls, introduce a formal
 validation layer: `Diagnostic { severity: Error | Warning, message }` returned
 from a `validate(molecule, context) -> Vec<Diagnostic>` pipeline that runs before

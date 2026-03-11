@@ -14,9 +14,10 @@ const PRESETS_DIR: &str = "presets";
 const TEMPLATES_DIR: &str = "templates";
 
 #[derive(Clone, Debug, Default)]
-#[allow(dead_code)] // fields used by validation pipeline (item 17)
 pub struct TemplateMeta {
+    #[allow(dead_code)] // reserved for method/software compatibility checks (item 19)
     pub software: Option<String>,
+    #[allow(dead_code)] // reserved for workflow layer (item 20)
     pub jobtype: Option<String>,
     pub requires: Vec<String>,
     pub description: Option<String>,
@@ -25,7 +26,6 @@ pub struct TemplateMeta {
 #[derive(Clone, Debug)]
 pub struct Template {
     pub name: String,
-    #[allow(dead_code)] // used by validation pipeline (item 17)
     pub meta: TemplateMeta,
     body: String,
 }
@@ -313,18 +313,6 @@ fn parse_frontmatter(body: &str) -> TemplateMeta {
     }
 }
 
-/// Returns the keys from `requires` that are absent from `context`.
-/// Called by the pre-generation validation pipeline (item 17).
-#[allow(dead_code)] // wired up in item 17
-pub fn missing_vars(context: &tera::Context, requires: &[String]) -> Vec<String> {
-    let json = context.clone().into_json();
-    requires
-        .iter()
-        .filter(|k| json.get(k.as_str()).is_none())
-        .cloned()
-        .collect()
-}
-
 // functions for the templates
 fn print_coords(args: &HashMap<String, Value>) -> Result<Value, tera::Error> {
     let molecule: Molecule = match args.get("molecule") {
@@ -427,29 +415,6 @@ end
             .render_with_molecule(&tera::Context::new(), &molecule, "mymol")
             .unwrap();
         assert_eq!(result, "mymol 2");
-    }
-
-    #[test]
-    fn missing_vars_detects_absent_keys() {
-        let mut ctx = tera::Context::new();
-        ctx.insert("method", "pbe0");
-        let requires = vec!["method".to_string(), "basis_set".to_string()];
-        assert_eq!(missing_vars(&ctx, &requires), vec!["basis_set"]);
-    }
-
-    #[test]
-    fn missing_vars_empty_when_all_present() {
-        let mut ctx = tera::Context::new();
-        ctx.insert("method", "pbe0");
-        ctx.insert("basis_set", "def2-tzvp");
-        let requires = vec!["method".to_string(), "basis_set".to_string()];
-        assert!(missing_vars(&ctx, &requires).is_empty());
-    }
-
-    #[test]
-    fn missing_vars_empty_requires() {
-        let ctx = tera::Context::new();
-        assert!(missing_vars(&ctx, &[]).is_empty());
     }
 
     #[test]

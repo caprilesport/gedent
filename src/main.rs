@@ -8,7 +8,7 @@ use clap_complete::{generate, Shell};
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use color_eyre::eyre::{bail, eyre, Report as Error, Result, WrapErr};
 use include_dir::{include_dir, Dir};
-use log::{debug, info};
+use log::{debug, error, info, warn};
 use std::fs::{read_dir, write};
 use std::path::PathBuf;
 
@@ -16,6 +16,7 @@ mod config;
 mod elements;
 mod molecule;
 mod template;
+mod validation;
 
 const PRESETS_DIR: &str = "presets";
 const TEMPLATES_DIR: &str = "templates";
@@ -690,7 +691,41 @@ fn generate_input(
         .as_ref()
         .unwrap_or(&config.gedent.default_extension);
 
+    // Run validation on all inputs before rendering anything, so the user
+    // sees every problem at once rather than one per run.
+    let mut has_errors = false;
+    if molecules.is_empty() {
+        for d in validation::validate(None, &context, &template.meta.requires) {
+            emit_diagnostic(&template.name, &d);
+            if d.severity == validation::Severity::Error {
+                has_errors = true;
+            }
+        }
+    } else {
+        for (path, molecule) in &molecules {
+            let name = path
+                .file_stem()
+                .map_or_else(|| path.to_string_lossy(), |s| s.to_string_lossy());
+            for d in validation::validate(Some(molecule), &context, &template.meta.requires) {
+                emit_diagnostic(&name, &d);
+                if d.severity == validation::Severity::Error {
+                    has_errors = true;
+                }
+            }
+        }
+    }
+    if has_errors {
+        bail!("Validation failed — fix the errors above before generating.");
+    }
+
     render_inputs(&template, molecules, &context, extension)
+}
+
+fn emit_diagnostic(name: &str, d: &validation::Diagnostic) {
+    match d.severity {
+        validation::Severity::Error => error!("{name}: {}", d.message),
+        validation::Severity::Warning => warn!("{name}: {}", d.message),
+    }
 }
 
 #[cfg(test)]
