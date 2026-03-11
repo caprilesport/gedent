@@ -34,8 +34,8 @@ replacing it with `metadata: HashMap<String, String>` populated by each parser,
 or dropping it entirely since it rarely contains anything useful.
 
 ### 12. Basic Tera template functions
-**Status:** not started
-Depends on item 1 (real `Atom` type). Useful functions:
+**Status:** not started — `Atom { element: Element, x, y, z }` is in place, ready to implement
+Useful functions:
 - `natoms(molecule)` — total atom count
 - `count_element(molecule, symbol)` — count atoms of a given element
 - `element_list(molecule)` — unique elements present
@@ -46,8 +46,8 @@ Depends on item 1 (real `Atom` type). Useful functions:
   reference energy
 
 ### 13. Geometric measurements in templates
-**Status:** not started
-Depends on item 1. Expose as Tera functions so templates can embed computed
+**Status:** not started — depends on item 12
+Expose as Tera functions so templates can embed computed
 geometry directly in input files:
 - `distance(molecule, i, j)` — bond length between atoms i and j
 - `angle(molecule, i, j, k)` — valence angle
@@ -87,7 +87,7 @@ optionally `--ts mol_ts.xyz`. The Tera context would expose named molecules
 endpoint verification, and linear transit inputs.
 
 ### 17. Pre-generation validation pipeline
-**Status:** not started
+**Status:** partial — unknown element symbols already caught at parse time via `Element` type
 Rather than scattering ad-hoc `bail!` / `println!` calls, introduce a formal
 validation layer: `Diagnostic { severity: Error | Warning, message }` returned
 from a `validate(molecule, context) -> Vec<Diagnostic>` pipeline that runs before
@@ -176,6 +176,28 @@ Depends on items 11–17 being reasonably solid. An opinionated layer on top of
 templates for common multi-step sequences (e.g. `--workflow opt-sp` runs geometry
 optimization then single-point). Workflows pre-populate context and pick the right
 template automatically. Quality tiers: `quick` / `production` / `benchmark`.
+
+### 22. `--var KEY=VALUE` CLI context override
+**Status:** not started
+The `[parameters]` section in `gedent.toml` is the escape hatch for arbitrary
+Tera variables, but editing a file for a one-off run is annoying. A `--var`
+flag on `gedent gen` lets you inject or override any context variable inline:
+
+```
+gedent gen scan --var frozen_atoms="[20, 28]" --var nsteps=20 mol.xyz
+```
+
+Multiple `--var` flags should be accepted. Values are parsed as TOML literals
+so integers, booleans, and arrays work naturally — not just strings. Precedence:
+`--var` wins over `[parameters]`, which wins over `[model]`/`[resources]`.
+
+Implementation notes:
+- `--var` takes `KEY=VALUE` strings; split on first `=`, parse the value with
+  `toml::Value::from_str` for type inference.
+- Add to `GenOptions` as `vars: Vec<(String, toml::Value)>` and insert into
+  context after the `[parameters]` loop in `generate_input`.
+- The `--method`, `--basis-set`, etc. flags already cover the named model
+  fields — `--var` fills the gap for `[parameters]`-style free-form keys.
 
 ---
 
