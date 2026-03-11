@@ -324,9 +324,23 @@ impl Config {
         Ok(chain)
     }
 
-    /// Returns the gedent home directory (`~/.config/gedent/`), erroring if it
-    /// does not exist.
+    /// Returns the gedent home directory, erroring if it does not exist.
+    ///
+    /// The location is resolved in order:
+    /// 1. `GEDENT_HOME` environment variable (if set)
+    /// 2. `~/.config/gedent/` (platform config dir via `dirs`)
     pub fn gedent_home() -> Result<PathBuf, Error> {
+        if let Ok(home) = std::env::var("GEDENT_HOME") {
+            let path = PathBuf::from(home);
+            return match path.try_exists() {
+                Ok(true) => Ok(path),
+                Ok(false) => bail!(
+                    "GEDENT_HOME is set to {} but the directory does not exist.",
+                    path.display()
+                ),
+                Err(err) => bail!("Failed to check GEDENT_HOME: {:?}", err),
+            };
+        }
         let mut config_dir =
             dirs::config_dir().ok_or_else(|| eyre!("Can't retrieve system config directory."))?;
         config_dir.push("gedent");

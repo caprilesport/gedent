@@ -65,7 +65,20 @@ pub fn validate(
         diags.extend(check_superposed_atoms(mol));
         diags.extend(check_charge_mult(mol, context));
     }
-    diags.extend(check_missing_vars(context, requires));
+    // "Molecule" is injected per-render in render_with_molecule(), not into the
+    // base context. Skip it from the missing-vars check when a molecule is provided.
+    let filtered_requires: Vec<String>;
+    let effective_requires: &[String] = if molecule.is_some() {
+        filtered_requires = requires
+            .iter()
+            .filter(|k| k.as_str() != "Molecule")
+            .cloned()
+            .collect();
+        &filtered_requires
+    } else {
+        requires
+    };
+    diags.extend(check_missing_vars(context, effective_requires));
     diags.extend(check_compat(context, db, software));
     diags.extend(check_method_vars(context, db));
     diags
