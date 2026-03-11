@@ -156,27 +156,6 @@ templates for common multi-step sequences (e.g. `--workflow opt-sp` runs geometr
 optimization then single-point). Workflows pre-populate context and pick the right
 template automatically. Quality tiers: `quick` / `production` / `benchmark`.
 
-### 22. `--var KEY=VALUE` CLI context override
-**Status:** done
-The `[parameters]` section in `gedent.toml` is the escape hatch for arbitrary
-Tera variables, but editing a file for a one-off run is annoying. A `--var`
-flag on `gedent gen` lets you inject or override any context variable inline:
-
-```
-gedent gen scan --var frozen_atoms="[20, 28]" --var nsteps=20 mol.xyz
-```
-
-Multiple `--var` flags should be accepted. Values are parsed as TOML literals
-so integers, booleans, and arrays work naturally — not just strings. Precedence:
-`--var` wins over `[parameters]`, which wins over `[model]`/`[resources]`.
-
-Implementation notes:
-- `--var` takes `KEY=VALUE` strings; split on first `=`, parse the value with
-  `toml::Value::from_str` for type inference.
-- Add to `GenOptions` as `vars: Vec<(String, toml::Value)>` and insert into
-  context after the `[parameters]` loop in `generate_input`.
-- The `--method`, `--basis-set`, etc. flags already cover the named model
-  fields — `--var` fills the gap for `[parameters]`-style free-form keys.
 
 ---
 

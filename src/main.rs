@@ -44,6 +44,8 @@ struct GenOptions {
     /// Raw `KEY=VALUE` strings from `--var`; parsed and inserted into context
     /// after `[parameters]`, so they win over config file values.
     vars: Vec<String>,
+    dry_run: bool,
+    show_context: bool,
 }
 
 #[derive(Debug)]
@@ -132,6 +134,12 @@ enum Mode {
         /// Set an arbitrary template variable (KEY=VALUE, value parsed as TOML)
         #[arg(long = "var", value_name = "KEY=VALUE")]
         vars: Vec<String>,
+        /// Validate and show what would be generated without writing any files
+        #[arg(long, default_value_t = false)]
+        dry_run: bool,
+        /// Print the full Tera context as JSON (useful for template debugging)
+        #[arg(long, default_value_t = false)]
+        show_context: bool,
     },
     // Subcommand to deal with configurations
     /// Access gedent configuration
@@ -262,6 +270,8 @@ fn main() -> Result<()> {
                 nprocs,
                 mem,
                 vars,
+                dry_run,
+                show_context,
             } => {
                 let mut molecules: Vec<(PathBuf, Molecule)> = vec![];
                 if let Some(files) = xyz_files {
@@ -282,6 +292,8 @@ fn main() -> Result<()> {
                     nprocs,
                     mem,
                     vars,
+                    dry_run,
+                    show_context,
                 };
                 let results = generate_input(template_name, molecules, &opts)?;
                 for input in results {
@@ -732,6 +744,11 @@ fn generate_input(
         .as_ref()
         .unwrap_or(&config.gedent.default_extension);
 
+    if opts.show_context {
+        let json = context.clone().into_json();
+        println!("{}", serde_json::to_string_pretty(&json)?);
+    }
+
     let db = software::SoftwareDb::load().unwrap_or_default();
 
     // Run validation on all inputs before rendering anything, so the user
@@ -765,6 +782,23 @@ fn generate_input(
     }
     if has_errors {
         bail!("Validation failed — fix the errors above before generating.");
+    }
+
+    if opts.dry_run {
+        if molecules.is_empty() {
+            let filename = PathBuf::from(&template.name)
+                .with_extension(extension)
+                .file_name()
+                .map_or_else(|| PathBuf::from("output"), PathBuf::from);
+            println!("dry-run: would write {}", filename.display());
+        } else {
+            for (path, _) in &molecules {
+                let stem = path.file_stem().unwrap_or(path.as_os_str());
+                let filename = PathBuf::from(stem).with_extension(extension);
+                println!("dry-run: would write {}", filename.display());
+            }
+        }
+        return Ok(vec![]);
     }
 
     render_inputs(&template, molecules, &context, extension)
