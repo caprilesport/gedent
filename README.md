@@ -7,11 +7,7 @@ templates to generate input files for quantum chemistry software such as
 [XTB](https://xtb-docs.readthedocs.io/en/latest/),
 [ADF](https://www.scm.com/), [NWChem](https://www.nwchem-sw.org/), and others.
 
-`gedent` stands for _gerador de entradas_ — Portuguese for "input generator". 🇧🇷
-
-## Is it any good?
-
-[Yes.](https://news.ycombinator.com/item?id=3067434)
+`gedent` stands for _gerador de entradas_ — Portuguese for "input generator".
 
 ---
 
@@ -29,8 +25,6 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 ```bash
 cargo install gedent
-gedent --set-up       # create ~/.config/gedent/ with default templates and config
-gedent --health       # verify the setup
 ```
 
 ### From source
@@ -69,7 +63,7 @@ solvation_model = "smd"     # smd | cpcm | alpb | cosmo | ...
 
 [resources]
 nprocs = 8
-mem = 3000                  # MB per core
+mem = 3000                  # MB per core in case of orca
 
 [parameters]
 # Arbitrary key-value pairs available in templates as Tera variables.
