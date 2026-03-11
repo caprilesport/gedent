@@ -8,48 +8,76 @@ const CONFIG_NAME: &str = "gedent.toml";
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
+/// Tool-level settings from the `[gedent]` config section.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct GedentConfig {
+    /// Default output file extension (e.g. `"inp"`, `"gjf"`).
     pub default_extension: String,
+    /// Default software name used for template disambiguation when a short
+    /// template name matches multiple `software/name` paths.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub software: Option<String>,
 }
 
+/// Chemistry parameters from the `[model]` config section.
+///
+/// All fields are optional; unset fields are not injected into the Tera context.
+/// Unknown fields in the config file are rejected with an error.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ModelConfig {
+    /// DFT functional or method keyword (e.g. `"pbe0"`, `"pbeh-3c"`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub method: Option<String>,
+    /// Basis set keyword (e.g. `"def2-tzvp"`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub basis_set: Option<String>,
+    /// Total molecular charge.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub charge: Option<i64>,
+    /// Spin multiplicity (2S+1).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mult: Option<i64>,
+    /// Dispersion correction keyword (e.g. `"d3bj"`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dispersion: Option<String>,
+    /// Solvent name. Setting this also injects `solvation = true` into context.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub solvent: Option<String>,
+    /// Solvation model keyword (e.g. `"smd"`, `"cpcm"`, `"alpb"`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub solvation_model: Option<String>,
 }
 
+/// Compute resource settings from the `[resources]` config section.
+///
+/// Unknown fields in the config file are rejected with an error.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ResourcesConfig {
+    /// Number of parallel processes / CPU cores.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub nprocs: Option<i64>,
+    /// Memory per core in MB.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mem: Option<i64>,
 }
 
+/// Fully resolved configuration, produced by merging the cascade chain.
+///
+/// The cascade walks up from cwd to `~/.config/gedent/`, merging
+/// `gedent.toml` files key-by-key. Deeper (closer to cwd) files win.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Config {
+    /// Tool settings (`[gedent]` section).
     pub gedent: GedentConfig,
+    /// Chemistry parameters (`[model]` section).
     #[serde(default)]
     pub model: ModelConfig,
+    /// Compute resources (`[resources]` section).
     #[serde(default)]
     pub resources: ResourcesConfig,
+    /// Arbitrary Tera context variables (`[parameters]` section).
     #[serde(default)]
     pub parameters: Map<String, Value>,
 }
@@ -178,8 +206,10 @@ fn raw_contributions(raw: &RawConfig) -> Vec<String> {
 // ── Config impl ───────────────────────────────────────────────────────────────
 
 impl Config {
-    /// Load and merge all config files in the cascade chain (global → local).
-    /// Local values override global values key-by-key.
+    /// Load and merge the full config cascade into a resolved [`Config`].
+    ///
+    /// Reads every `gedent.toml` in the chain (global `~/.config/gedent/` through
+    /// cwd) and merges them left-to-right: later (deeper) files win per key.
     pub fn get() -> Result<Self, Error> {
         let chain = Self::collect_chain()?;
         let merged = chain

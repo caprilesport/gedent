@@ -2,19 +2,26 @@ use crate::molecule::Molecule;
 use crate::software::SoftwareDb;
 use std::fmt;
 
+/// Severity of a validation [`Diagnostic`].
 #[derive(Debug, PartialEq, Eq)]
 pub enum Severity {
+    /// Generation is aborted; all errors across all inputs are reported first.
     Error,
+    /// Generation proceeds; the message is printed as a warning.
     Warning,
 }
 
+/// A single validation finding with a severity and a human-readable message.
 #[derive(Debug)]
 pub struct Diagnostic {
+    /// Whether this finding aborts generation or just warns.
     pub severity: Severity,
+    /// Human-readable description of the problem.
     pub message: String,
 }
 
 impl Diagnostic {
+    /// Create an error-severity diagnostic.
     pub fn error(message: impl Into<String>) -> Self {
         Self {
             severity: Severity::Error,
@@ -22,6 +29,7 @@ impl Diagnostic {
         }
     }
 
+    /// Create a warning-severity diagnostic.
     pub fn warning(message: impl Into<String>) -> Self {
         Self {
             severity: Severity::Warning,
@@ -40,9 +48,11 @@ impl fmt::Display for Diagnostic {
     }
 }
 
-/// Run all validation checks. Molecule-specific checks are skipped when
-/// `molecule` is `None` (i.e. the no-molecule generation path).
-/// `software` is the resolved software name (from config/opts), may be `None`.
+/// Run all validation checks and return every finding as a [`Vec<Diagnostic>`].
+///
+/// Molecule-specific checks (charge/mult parity, superposed atoms) are skipped
+/// when `molecule` is `None`. `software` is the resolved software name from
+/// config/CLI options and is used for compatibility rule matching.
 pub fn validate(
     molecule: Option<&Molecule>,
     context: &tera::Context,

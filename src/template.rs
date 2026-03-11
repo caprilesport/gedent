@@ -15,20 +15,41 @@ use walkdir::WalkDir;
 const PRESETS_DIR: &str = "presets";
 const TEMPLATES_DIR: &str = "templates";
 
+/// Metadata parsed from a template's frontmatter comment block.
+///
+/// Frontmatter is a Tera comment at the top of the template file:
+/// ```text
+/// {#
+/// software = "orca"
+/// jobtype  = "sp"
+/// requires = ["method", "basis_set", "charge", "mult", "nprocs", "mem", "Molecule"]
+/// description = "Single point energy"
+/// #}
+/// ```
 #[derive(Clone, Debug, Default)]
 pub struct TemplateMeta {
+    /// Software the template targets (e.g. `"orca"`). Used for disambiguation
+    /// when multiple templates share a short name.
     #[allow(dead_code)] // reserved for method/software compatibility checks (item 19)
     pub software: Option<String>,
+    /// Job type (e.g. `"sp"`, `"opt"`). Reserved for the workflow layer.
     #[allow(dead_code)] // reserved for workflow layer (item 20)
     pub jobtype: Option<String>,
+    /// Context variables that must be present before rendering. gedent reports
+    /// a clear error listing any that are missing.
     pub requires: Vec<String>,
+    /// Human-readable description shown in `gedent template list`.
     pub description: Option<String>,
 }
 
+/// A loaded template ready for rendering.
 #[derive(Clone, Debug)]
 pub struct Template {
+    /// Template name as provided by the user (e.g. `"sp"` or `"orca/sp"`).
     pub name: String,
+    /// Parsed frontmatter.
     pub meta: TemplateMeta,
+    /// Raw template body (Tera source).
     body: String,
 }
 
@@ -73,6 +94,10 @@ impl Template {
         Ok(tera.render(&self.name, context)?)
     }
 
+    /// Render the template with a molecule injected into context.
+    ///
+    /// Injects `name` (the xyz file stem) and `Molecule` on top of `context`,
+    /// then calls [`Template::render`].
     pub fn render_with_molecule(
         &self,
         context: &tera::Context,
@@ -95,6 +120,11 @@ impl Template {
             .collect()
     }
 
+    /// Resolve a template by name, load it from disk, and parse its frontmatter.
+    ///
+    /// `template_name` may be a short name (`"sp"`) or a qualified path
+    /// (`"orca/sp"`). When multiple templates share a short name, `software`
+    /// is used as a tiebreaker.
     pub fn get(template_name: String, software: Option<&str>) -> Result<Self, Error> {
         let path = Self::find_path(&template_name, software)?;
         let body =

@@ -5,11 +5,16 @@ use std::fmt;
 use std::io::BufRead;
 use std::path::PathBuf;
 
+/// A single atom with its element and Cartesian coordinates (Å).
 #[derive(PartialEq, Serialize, Deserialize, Debug, Clone)]
 pub struct Atom {
+    /// Element identity.
     pub element: Element,
+    /// x coordinate in Å.
     pub x: f64,
+    /// y coordinate in Å.
     pub y: f64,
+    /// z coordinate in Å.
     pub z: f64,
 }
 
@@ -50,13 +55,31 @@ impl fmt::Display for Atom {
     }
 }
 
+/// A molecule parsed from an XYZ file.
+///
+/// Serialized to JSON and injected into the Tera context as `Molecule`
+/// when an xyz file is provided to `gedent gen`.
 #[derive(PartialEq, Serialize, Deserialize, Debug, Clone)]
 pub struct Molecule {
+    /// Comment line from the xyz file (line 2). `None` if the line is blank.
     pub description: Option<String>,
+    /// All atoms in file order.
     pub atoms: Vec<Atom>,
 }
 
 impl Molecule {
+    /// Parse a single XYZ block from a buffered reader.
+    ///
+    /// The format is:
+    /// ```text
+    /// <natoms>
+    /// <description or blank>
+    /// <element> <x> <y> <z>
+    /// ...
+    /// ```
+    ///
+    /// Unknown element symbols error at parse time. Leading blank lines before
+    /// the atom count are skipped.
     pub fn from_reader(reader: impl BufRead) -> Result<Self, Error> {
         let lines: Vec<String> = reader
             .lines()
@@ -101,6 +124,7 @@ impl Molecule {
         Ok(Self { description, atoms })
     }
 
+    /// Open an xyz file at `path` and parse it into a `Molecule`.
     pub fn from_xyz(path: &PathBuf) -> Result<Self, Error> {
         let file = std::fs::File::open(path)
             .wrap_err(format!("Failed to open xyz file {}", path.display()))?;
