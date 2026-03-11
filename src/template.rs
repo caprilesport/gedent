@@ -1,4 +1,6 @@
 use crate::config::Config;
+use crate::elements::Element;
+use crate::molecule::Atom;
 use crate::Molecule;
 use color_eyre::eyre::{bail, Report as Error, Result, WrapErr};
 use comfy_table::{presets, Table};
@@ -61,6 +63,12 @@ impl Template {
     pub fn render(&self, context: &tera::Context) -> Result<String, Error> {
         let mut tera = Tera::default();
         tera.register_function("print_coords", print_coords);
+        tera.register_function("natoms", natoms);
+        tera.register_function("count_element", count_element);
+        tera.register_function("element_list", element_list);
+        tera.register_function("atom_symbol", atom_symbol);
+        tera.register_function("atom_coords", atom_coords);
+        tera.register_function("measure", measure);
         tera.add_raw_template(&self.name, &self.body)?;
         Ok(tera.render(&self.name, context)?)
     }
@@ -313,24 +321,44 @@ fn parse_frontmatter(body: &str) -> TemplateMeta {
     }
 }
 
-// functions for the templates
-fn print_coords(args: &HashMap<String, Value>) -> Result<Value, tera::Error> {
-    let molecule: Molecule = match args.get("molecule") {
-        Some(val) => match from_value(val.clone()) {
-            Ok(v) => v,
-            Err(_) => {
-                return Err(tera::Error::msg(format!(
-                    "Function `print_coords` received an object of type {val}, not `Molecule`"
-                )));
-            }
-        },
-        None => {
-            return Err(tera::Error::msg(
-                "Function `print_coords` didn't receive a `molecule` argument",
-            ))
-        }
-    };
+// ── Tera function helpers ─────────────────────────────────────────────────────
 
+fn get_molecule(args: &HashMap<String, Value>) -> Result<Molecule, tera::Error> {
+    args.get("molecule").map_or_else(
+        || Err(tera::Error::msg("missing required `molecule` argument")),
+        |val| {
+            from_value(val.clone())
+                .map_err(|_| tera::Error::msg("received an invalid `molecule` argument"))
+        },
+    )
+}
+
+/// Convert a 1-based `i` argument to a 0-based array index, checking bounds.
+fn get_index(
+    args: &HashMap<String, Value>,
+    n_atoms: usize,
+    fn_name: &str,
+) -> Result<usize, tera::Error> {
+    let i = args
+        .get("i")
+        .and_then(Value::as_i64)
+        .ok_or_else(|| tera::Error::msg(format!("{fn_name}: requires an integer `i` (1-based)")))?;
+    let idx = usize::try_from(i)
+        .ok()
+        .filter(|&idx| idx >= 1 && idx <= n_atoms)
+        .ok_or_else(|| {
+            tera::Error::msg(format!(
+                "{fn_name}: index {i} out of range \
+                 (molecule has {n_atoms} atoms, indices are 1-based)"
+            ))
+        })?;
+    Ok(idx - 1)
+}
+
+// ── Tera functions ────────────────────────────────────────────────────────────
+
+fn print_coords(args: &HashMap<String, Value>) -> Result<Value, tera::Error> {
+    let molecule = get_molecule(args)?;
     let formatted = molecule
         .atoms
         .iter()
@@ -340,11 +368,238 @@ fn print_coords(args: &HashMap<String, Value>) -> Result<Value, tera::Error> {
     Ok(to_value(formatted)?)
 }
 
+fn natoms(args: &HashMap<String, Value>) -> Result<Value, tera::Error> {
+    let mol = get_molecule(args)?;
+    Ok(to_value(mol.atoms.len())?)
+}
+
+fn count_element(args: &HashMap<String, Value>) -> Result<Value, tera::Error> {
+    let mol = get_molecule(args)?;
+    let symbol = args
+        .get("symbol")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| tera::Error::msg("count_element: requires a `symbol` string argument"))?;
+    let element = symbol.parse::<Element>().map_err(|_| {
+        tera::Error::msg(format!("count_element: unknown element symbol {symbol:?}"))
+    })?;
+    let count = mol.atoms.iter().filter(|a| a.element == element).count();
+    Ok(to_value(count)?)
+}
+
+fn element_list(args: &HashMap<String, Value>) -> Result<Value, tera::Error> {
+    let mol = get_molecule(args)?;
+    let mut seen = std::collections::HashSet::new();
+    let mut elements: Vec<Element> = mol
+        .atoms
+        .iter()
+        .map(|a| a.element)
+        .filter(|e| seen.insert(*e))
+        .collect();
+    elements.sort();
+    Ok(to_value(
+        elements
+            .iter()
+            .map(std::string::ToString::to_string)
+            .collect::<Vec<_>>(),
+    )?)
+}
+
+fn atom_symbol(args: &HashMap<String, Value>) -> Result<Value, tera::Error> {
+    let mol = get_molecule(args)?;
+    let idx = get_index(args, mol.atoms.len(), "atom_symbol")?;
+    Ok(to_value(mol.atoms[idx].element.to_string())?)
+}
+
+fn atom_coords(args: &HashMap<String, Value>) -> Result<Value, tera::Error> {
+    let mol = get_molecule(args)?;
+    let idx = get_index(args, mol.atoms.len(), "atom_coords")?;
+    let a = &mol.atoms[idx];
+    Ok(to_value(vec![a.x, a.y, a.z])?)
+}
+
+fn measure(args: &HashMap<String, Value>) -> Result<Value, tera::Error> {
+    let mol = get_molecule(args)?;
+    let raw = args
+        .get("atoms")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| {
+            tera::Error::msg(
+                "measure: requires an `atoms` array of 1-based integer indices (2, 3, or 4)",
+            )
+        })?;
+
+    let n_atoms = mol.atoms.len();
+    let indices: Vec<usize> = raw
+        .iter()
+        .map(|v| {
+            let i = v
+                .as_i64()
+                .ok_or_else(|| tera::Error::msg("measure: atom indices must be integers"))?;
+            usize::try_from(i)
+                .ok()
+                .filter(|&idx| idx >= 1 && idx <= n_atoms)
+                .map(|idx| idx - 1)
+                .ok_or_else(|| {
+                    tera::Error::msg(format!(
+                        "measure: index {i} out of range \
+                         (molecule has {n_atoms} atoms, indices are 1-based)"
+                    ))
+                })
+        })
+        .collect::<Result<_, _>>()?;
+
+    match indices.len() {
+        2 => Ok(to_value(calc_distance(
+            &mol.atoms[indices[0]],
+            &mol.atoms[indices[1]],
+        ))?),
+        3 => Ok(to_value(calc_angle(
+            &mol.atoms[indices[0]],
+            &mol.atoms[indices[1]],
+            &mol.atoms[indices[2]],
+        )?)?),
+        4 => Ok(to_value(calc_dihedral(
+            &mol.atoms[indices[0]],
+            &mol.atoms[indices[1]],
+            &mol.atoms[indices[2]],
+            &mol.atoms[indices[3]],
+        )?)?),
+        n => Err(tera::Error::msg(format!(
+            "measure: expected 2, 3, or 4 atom indices, got {n}"
+        ))),
+    }
+}
+
+// ── Geometry primitives ───────────────────────────────────────────────────────
+
+fn vec3(a: &Atom, b: &Atom) -> [f64; 3] {
+    [b.x - a.x, b.y - a.y, b.z - a.z]
+}
+
+fn dot(a: &[f64; 3], b: &[f64; 3]) -> f64 {
+    a[2].mul_add(b[2], a[1].mul_add(b[1], a[0] * b[0]))
+}
+
+fn cross(a: &[f64; 3], b: &[f64; 3]) -> [f64; 3] {
+    [
+        a[1].mul_add(b[2], -(a[2] * b[1])),
+        a[2].mul_add(b[0], -(a[0] * b[2])),
+        a[0].mul_add(b[1], -(a[1] * b[0])),
+    ]
+}
+
+fn norm(v: &[f64; 3]) -> f64 {
+    v[2].mul_add(v[2], v[0].mul_add(v[0], v[1] * v[1])).sqrt()
+}
+
+fn calc_distance(a: &Atom, b: &Atom) -> f64 {
+    norm(&vec3(a, b))
+}
+
+fn calc_angle(a: &Atom, b: &Atom, c: &Atom) -> Result<f64, tera::Error> {
+    let v1 = vec3(b, a); // vectors away from central atom b
+    let v2 = vec3(b, c);
+    let n1 = norm(&v1);
+    let n2 = norm(&v2);
+    if n1 < 1e-10 || n2 < 1e-10 {
+        return Err(tera::Error::msg(
+            "measure: coincident atoms — angle is undefined",
+        ));
+    }
+    let cos_theta = (dot(&v1, &v2) / (n1 * n2)).clamp(-1.0, 1.0);
+    Ok(cos_theta.acos().to_degrees())
+}
+
+/// Dihedral angle a–b–c–d using the atan2 formula (range −180°..180°).
+#[allow(clippy::many_single_char_names)]
+fn calc_dihedral(a: &Atom, b: &Atom, c: &Atom, d: &Atom) -> Result<f64, tera::Error> {
+    let b1 = vec3(a, b);
+    let b2 = vec3(b, c);
+    let b3 = vec3(c, d);
+    let n = norm(&b2);
+    if n < 1e-10 {
+        return Err(tera::Error::msg(
+            "measure: coincident central atoms — dihedral is undefined",
+        ));
+    }
+    let n1 = cross(&b1, &b2);
+    let n2 = cross(&b2, &b3);
+    let m = cross(&n1, &b2);
+    let x = dot(&n1, &n2);
+    let y = dot(&m, &n2) / n;
+    Ok(y.atan2(x).to_degrees())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::elements::Element;
+    use crate::molecule::{Atom, Molecule};
     use toml::Value;
+
+    /// A four-atom molecule with exact geometry:
+    ///
+    /// - atom 1 (H): (1, 0, 0)
+    /// - atom 2 (C): (0, 0, 0)
+    /// - atom 3 (N): (0, 1, 0)
+    /// - atom 4 (O): (0, 1, 1)
+    ///
+    /// Known values (1-based indices):
+    ///   distance(1,2) = 1.0 Å
+    ///   angle(1,2,3)  = 90.0°
+    ///   dihedral(1,2,3,4) = 90.0°
+    fn geo_mol() -> Molecule {
+        Molecule {
+            description: None,
+            atoms: vec![
+                Atom {
+                    element: Element::H,
+                    x: 1.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                Atom {
+                    element: Element::C,
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                Atom {
+                    element: Element::N,
+                    x: 0.0,
+                    y: 1.0,
+                    z: 0.0,
+                },
+                Atom {
+                    element: Element::O,
+                    x: 0.0,
+                    y: 1.0,
+                    z: 1.0,
+                },
+            ],
+        }
+    }
+
+    fn render(body: &str, mol: &Molecule) -> String {
+        Template::with_body("t", body)
+            .render_with_molecule(&tera::Context::new(), mol, "t")
+            .unwrap()
+    }
+
+    fn render_err(body: &str, mol: &Molecule) -> String {
+        // Use debug format to include the full cause chain — Tera nests the
+        // actual function error message one level deep.
+        format!(
+            "{:?}",
+            Template::with_body("t", body)
+                .render_with_molecule(&tera::Context::new(), mol, "t")
+                .unwrap_err()
+        )
+    }
+
+    fn parse_f64(s: &str) -> f64 {
+        s.trim().parse::<f64>().expect("expected a float")
+    }
 
     #[test]
     fn render_template_works() {
@@ -388,8 +643,6 @@ end
 
     #[test]
     fn render_with_molecule_inserts_name_and_molecule() {
-        use crate::molecule::{Atom, Molecule};
-
         let template = Template {
             body: "{{ name }} {{ Molecule.atoms | length }}".to_string(),
             ..Template::new()
@@ -435,10 +688,263 @@ end
         assert!(meta.requires.is_empty());
     }
 
+    // ── natoms ────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn natoms_returns_count() {
+        assert_eq!(render("{{ natoms(molecule=Molecule) }}", &geo_mol()), "4");
+    }
+
+    // ── count_element ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn count_element_known_element() {
+        assert_eq!(
+            render(
+                "{{ count_element(molecule=Molecule, symbol='H') }}",
+                &geo_mol()
+            ),
+            "1"
+        );
+    }
+
+    #[test]
+    fn count_element_absent_element() {
+        assert_eq!(
+            render(
+                "{{ count_element(molecule=Molecule, symbol='Fe') }}",
+                &geo_mol()
+            ),
+            "0"
+        );
+    }
+
+    // ── element_list ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn element_list_sorted_unique() {
+        // H(1) < C(6) < N(7) < O(8) — sorted by atomic number via Ord on Element
+        // Tera renders string arrays without surrounding quotes on each element.
+        assert_eq!(
+            render("{{ element_list(molecule=Molecule) }}", &geo_mol()),
+            "[H, C, N, O]"
+        );
+    }
+
+    #[test]
+    fn element_list_deduplicates() {
+        let mol = Molecule {
+            description: None,
+            atoms: vec![
+                Atom {
+                    element: Element::C,
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                Atom {
+                    element: Element::H,
+                    x: 1.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                Atom {
+                    element: Element::C,
+                    x: -1.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+            ],
+        };
+        assert_eq!(
+            render("{{ element_list(molecule=Molecule) }}", &mol),
+            "[H, C]"
+        );
+    }
+
+    // ── atom_symbol / atom_coords ─────────────────────────────────────────────
+
+    #[test]
+    fn atom_symbol_first_atom() {
+        assert_eq!(
+            render("{{ atom_symbol(molecule=Molecule, i=1) }}", &geo_mol()),
+            "H"
+        );
+    }
+
+    #[test]
+    fn atom_symbol_out_of_bounds_errors() {
+        let err = render_err("{{ atom_symbol(molecule=Molecule, i=99) }}", &geo_mol());
+        assert!(err.contains("out of range"));
+    }
+
+    #[test]
+    fn atom_coords_first_atom() {
+        // Tera renders whole-number floats without a decimal point.
+        assert_eq!(
+            render("{{ atom_coords(molecule=Molecule, i=1) }}", &geo_mol()),
+            "[1, 0, 0]"
+        );
+    }
+
+    // ── measure: distance ─────────────────────────────────────────────────────
+
+    #[test]
+    fn measure_distance_exact() {
+        let v = parse_f64(&render(
+            "{{ measure(molecule=Molecule, atoms=[1,2]) }}",
+            &geo_mol(),
+        ));
+        approx::assert_relative_eq!(v, 1.0);
+    }
+
+    #[test]
+    fn measure_distance_pythagorean() {
+        // (0,0,0) to (3,4,0): distance = 5
+        let mol = Molecule {
+            description: None,
+            atoms: vec![
+                Atom {
+                    element: Element::H,
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                Atom {
+                    element: Element::H,
+                    x: 3.0,
+                    y: 4.0,
+                    z: 0.0,
+                },
+            ],
+        };
+        let v = parse_f64(&render(
+            "{{ measure(molecule=Molecule, atoms=[1,2]) }}",
+            &mol,
+        ));
+        approx::assert_relative_eq!(v, 5.0);
+    }
+
+    // ── measure: angle ────────────────────────────────────────────────────────
+
+    #[test]
+    fn measure_angle_right_angle() {
+        let v = parse_f64(&render(
+            "{{ measure(molecule=Molecule, atoms=[1,2,3]) }}",
+            &geo_mol(),
+        ));
+        approx::assert_relative_eq!(v, 90.0);
+    }
+
+    #[test]
+    fn measure_angle_180_degrees() {
+        let mol = Molecule {
+            description: None,
+            atoms: vec![
+                Atom {
+                    element: Element::H,
+                    x: -1.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                Atom {
+                    element: Element::C,
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                Atom {
+                    element: Element::H,
+                    x: 1.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+            ],
+        };
+        let v = parse_f64(&render(
+            "{{ measure(molecule=Molecule, atoms=[1,2,3]) }}",
+            &mol,
+        ));
+        approx::assert_relative_eq!(v, 180.0);
+    }
+
+    // ── measure: dihedral ─────────────────────────────────────────────────────
+
+    #[test]
+    fn measure_dihedral_90_degrees() {
+        let v = parse_f64(&render(
+            "{{ measure(molecule=Molecule, atoms=[1,2,3,4]) }}",
+            &geo_mol(),
+        ));
+        approx::assert_relative_eq!(v, 90.0);
+    }
+
+    #[test]
+    fn measure_dihedral_180_degrees() {
+        // a=(0,1,0) b=(0,0,0) c=(0,0,1) d=(0,-1,1) → trans, 180°
+        let mol = Molecule {
+            description: None,
+            atoms: vec![
+                Atom {
+                    element: Element::H,
+                    x: 0.0,
+                    y: 1.0,
+                    z: 0.0,
+                },
+                Atom {
+                    element: Element::C,
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                Atom {
+                    element: Element::C,
+                    x: 0.0,
+                    y: 0.0,
+                    z: 1.0,
+                },
+                Atom {
+                    element: Element::H,
+                    x: 0.0,
+                    y: -1.0,
+                    z: 1.0,
+                },
+            ],
+        };
+        let v = parse_f64(&render(
+            "{{ measure(molecule=Molecule, atoms=[1,2,3,4]) }}",
+            &mol,
+        ));
+        approx::assert_relative_eq!(v, 180.0, epsilon = 1e-10);
+    }
+
+    // ── measure: error cases ──────────────────────────────────────────────────
+
+    #[test]
+    fn measure_wrong_atom_count_errors() {
+        let err = render_err("{{ measure(molecule=Molecule, atoms=[1]) }}", &geo_mol());
+        assert!(err.contains("expected 2, 3, or 4"));
+    }
+
+    #[test]
+    fn measure_out_of_bounds_errors() {
+        let err = render_err(
+            "{{ measure(molecule=Molecule, atoms=[1, 99]) }}",
+            &geo_mol(),
+        );
+        assert!(err.contains("out of range"));
+    }
+
+    #[test]
+    fn measure_zero_index_errors() {
+        let err = render_err("{{ measure(molecule=Molecule, atoms=[0, 1]) }}", &geo_mol());
+        assert!(err.contains("out of range"));
+    }
+
+    // ── print_coords ──────────────────────────────────────────────────────────
+
     #[test]
     fn print_coords_formats_atoms_correctly() {
-        use crate::molecule::{Atom, Molecule};
-
         let template = Template::with_body("t", "{{ print_coords(molecule=Molecule) }}");
         let molecule = Molecule {
             description: None,

@@ -34,7 +34,7 @@ replacing it with `metadata: HashMap<String, String>` populated by each parser,
 or dropping it entirely since it rarely contains anything useful.
 
 ### 12. Basic Tera template functions
-**Status:** not started — `Atom { element: Element, x, y, z }` is in place, ready to implement
+**Status:** done — natoms, count_element, element_list, atom_symbol, atom_coords implemented
 Useful functions:
 - `natoms(molecule)` — total atom count
 - `count_element(molecule, symbol)` — count atoms of a given element
@@ -46,7 +46,7 @@ Useful functions:
   reference energy
 
 ### 13. Geometric measurements in templates
-**Status:** not started — depends on item 12
+**Status:** done — single measure(molecule, atoms) function: 2 indices→distance, 3→angle, 4→dihedral; 1-based indexing throughout
 Expose as Tera functions so templates can embed computed
 geometry directly in input files:
 - `distance(molecule, i, j)` — bond length between atoms i and j
