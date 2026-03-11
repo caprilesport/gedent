@@ -632,6 +632,40 @@ fn build_context(
     context
 }
 
+fn render_inputs(
+    template: &Template,
+    molecules: Vec<(PathBuf, Molecule)>,
+    context: &tera::Context,
+    extension: &str,
+) -> Result<Vec<Input>, Error> {
+    let mut results: Vec<Input> = vec![];
+
+    if molecules.is_empty() {
+        let filename = PathBuf::from(&template.name).with_extension(extension);
+        let filename = filename
+            .file_name()
+            .ok_or_else(|| eyre!("Can't retrieve template name, exiting.."))?;
+
+        results.push(Input {
+            filename: PathBuf::from(filename),
+            content: template.render(context)?,
+        });
+    }
+
+    for (path, molecule) in molecules {
+        let stem = path
+            .file_stem()
+            .ok_or_else(|| eyre!("Can't retrieve stem from path {}", path.display()))?
+            .to_string_lossy();
+        results.push(Input {
+            filename: PathBuf::from(stem.as_ref()).with_extension(extension),
+            content: template.render_with_molecule(context, &molecule, &stem)?,
+        });
+    }
+
+    Ok(results)
+}
+
 fn generate_input(
     template_name: String,
     molecules: Vec<(PathBuf, Molecule)>,
@@ -656,32 +690,7 @@ fn generate_input(
         .as_ref()
         .unwrap_or(&config.gedent.default_extension);
 
-    let mut results: Vec<Input> = vec![];
-
-    if molecules.is_empty() {
-        let filename = PathBuf::from(&template.name).with_extension(extension);
-        let filename = filename
-            .file_name()
-            .ok_or_else(|| eyre!("Can't retrieve template name, exiting.."))?;
-
-        results.push(Input {
-            filename: PathBuf::from(filename),
-            content: template.render(&context)?,
-        });
-    }
-
-    for (path, molecule) in molecules {
-        let stem = path
-            .file_stem()
-            .ok_or_else(|| eyre!("Can't retrieve stem from path {}", path.display()))?
-            .to_string_lossy();
-        results.push(Input {
-            filename: PathBuf::from(stem.as_ref()).with_extension(extension),
-            content: template.render_with_molecule(&context, &molecule, &stem)?,
-        });
-    }
-
-    Ok(results)
+    render_inputs(&template, molecules, &context, extension)
 }
 
 #[cfg(test)]
@@ -781,5 +790,71 @@ mod tests {
         assert!(ctx.get("method").is_none());
         assert!(ctx.get("charge").is_none());
         assert!(ctx.get("solvation").is_none());
+    }
+
+    #[test]
+    fn render_inputs_no_molecules_uses_template_stem() {
+        let template = Template::with_body("orca/sp", "hello");
+        let inputs = render_inputs(&template, vec![], &tera::Context::new(), "inp").unwrap();
+        assert_eq!(inputs.len(), 1);
+        assert_eq!(inputs[0].filename, PathBuf::from("sp.inp"));
+        assert_eq!(inputs[0].content, "hello");
+    }
+
+    #[test]
+    fn render_inputs_single_molecule_uses_stem() {
+        use crate::elements::Element;
+        use crate::molecule::{Atom, Molecule};
+
+        let template = Template::with_body("sp", "{{ name }}");
+        let mol = Molecule {
+            description: None,
+            atoms: vec![Atom {
+                element: Element::H,
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            }],
+        };
+        let inputs = render_inputs(
+            &template,
+            vec![(PathBuf::from("water.xyz"), mol)],
+            &tera::Context::new(),
+            "inp",
+        )
+        .unwrap();
+        assert_eq!(inputs.len(), 1);
+        assert_eq!(inputs[0].filename, PathBuf::from("water.inp"));
+        assert_eq!(inputs[0].content, "water");
+    }
+
+    #[test]
+    fn render_inputs_multiple_molecules_produce_separate_files() {
+        use crate::elements::Element;
+        use crate::molecule::{Atom, Molecule};
+
+        let template = Template::with_body("sp", "{{ name }}");
+        let mol = || Molecule {
+            description: None,
+            atoms: vec![Atom {
+                element: Element::H,
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            }],
+        };
+        let inputs = render_inputs(
+            &template,
+            vec![
+                (PathBuf::from("mol1.xyz"), mol()),
+                (PathBuf::from("mol2.xyz"), mol()),
+            ],
+            &tera::Context::new(),
+            "com",
+        )
+        .unwrap();
+        assert_eq!(inputs.len(), 2);
+        assert_eq!(inputs[0].filename, PathBuf::from("mol1.com"));
+        assert_eq!(inputs[1].filename, PathBuf::from("mol2.com"));
     }
 }

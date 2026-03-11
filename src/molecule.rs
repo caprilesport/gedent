@@ -196,6 +196,22 @@ mod tests {
     }
 
     #[test]
+    fn atom_display_format() {
+        let atom = Atom {
+            element: Element::C,
+            x: 0.0,
+            y: 1.5,
+            z: -2.0,
+        };
+        let s = atom.to_string();
+        // {:<4} element symbol + three {:14.8} coordinates
+        assert!(s.starts_with("C   "));
+        assert!(s.contains("  0.00000000"));
+        assert!(s.contains("  1.50000000"));
+        assert!(s.contains(" -2.00000000"));
+    }
+
+    #[test]
     fn xyz_parse_case_insensitive_elements() {
         let input = "1\n\nfe  0.0  0.0  0.0";
         let mol = Molecule::from_reader(Cursor::new(input)).unwrap();

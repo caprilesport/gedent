@@ -262,6 +262,15 @@ impl Template {
             body: String::new(),
         }
     }
+
+    #[cfg(test)]
+    pub fn with_body(name: &str, body: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            meta: TemplateMeta::default(),
+            body: body.to_string(),
+        }
+    }
 }
 
 fn parse_frontmatter(body: &str) -> TemplateMeta {
@@ -459,5 +468,39 @@ end
         let meta = parse_frontmatter(body);
         assert!(meta.software.is_none());
         assert!(meta.requires.is_empty());
+    }
+
+    #[test]
+    fn print_coords_formats_atoms_correctly() {
+        use crate::molecule::{Atom, Molecule};
+
+        let template = Template::with_body("t", "{{ print_coords(molecule=Molecule) }}");
+        let molecule = Molecule {
+            description: None,
+            atoms: vec![
+                Atom {
+                    element: Element::C,
+                    x: 1.5,
+                    y: -2.0,
+                    z: 0.5,
+                },
+                Atom {
+                    element: Element::H,
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+            ],
+        };
+        let result = template
+            .render_with_molecule(&tera::Context::new(), &molecule, "t")
+            .unwrap();
+        let expected = molecule
+            .atoms
+            .iter()
+            .map(std::string::ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert_eq!(result, expected);
     }
 }

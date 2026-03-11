@@ -351,6 +351,24 @@ mod tests {
     }
 
     #[test]
+    fn unknown_field_in_model_errors() {
+        let toml = "[model]\nmethod = \"pbe0\"\ntypo_field = \"oops\"";
+        assert!(
+            toml::from_str::<RawConfig>(toml).is_err(),
+            "Unknown key in [model] should be rejected"
+        );
+    }
+
+    #[test]
+    fn unknown_top_level_section_errors() {
+        let toml = "[model]\nmethod = \"pbe0\"\n\n[completely_unknown]\nfoo = \"bar\"";
+        assert!(
+            toml::from_str::<RawConfig>(toml).is_err(),
+            "Unknown top-level section should be rejected"
+        );
+    }
+
+    #[test]
     fn cascade_three_level() {
         // global: method=pbe0, basis=def2-tzvp, charge=0
         let global = RawConfig {

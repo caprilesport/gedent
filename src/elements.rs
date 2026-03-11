@@ -457,6 +457,33 @@ mod tests {
     }
 
     #[test]
+    fn element_serializes_as_symbol_string() {
+        let json = serde_json::to_string(&Element::Fe).unwrap();
+        assert_eq!(json, "\"Fe\"");
+    }
+
+    #[test]
+    fn element_deserializes_from_symbol_string() {
+        let e: Element = serde_json::from_str("\"Fe\"").unwrap();
+        assert_eq!(e, Element::Fe);
+    }
+
+    #[test]
+    fn element_deserializes_case_insensitive() {
+        let e: Element = serde_json::from_str("\"fe\"").unwrap();
+        assert_eq!(e, Element::Fe);
+    }
+
+    #[test]
+    fn element_serde_roundtrip() {
+        for elem in [Element::H, Element::C, Element::Fe, Element::Og] {
+            let json = serde_json::to_string(&elem).unwrap();
+            let back: Element = serde_json::from_str(&json).unwrap();
+            assert_eq!(back, elem);
+        }
+    }
+
+    #[test]
     fn covalent_alvarez2008_works() {
         approx::assert_relative_eq!(Element::H.get_radius().unwrap(), 0.31);
         approx::assert_relative_eq!(Element::C.get_radius().unwrap(), 0.744_533_7);
