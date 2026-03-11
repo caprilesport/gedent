@@ -131,6 +131,50 @@ impl RawConfig {
     }
 }
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/// Format the non-empty fields of a `RawConfig` as one line per section,
+/// e.g. `[model]  method = "pbe0", charge = 0`.
+fn raw_contributions(raw: &RawConfig) -> Vec<String> {
+    let mut lines = vec![];
+
+    let mut gedent_parts = vec![];
+    if let Some(ref v) = raw.gedent.default_extension {
+        gedent_parts.push(format!("default_extension = {v:?}"));
+    }
+    if let Some(ref v) = raw.gedent.software {
+        gedent_parts.push(format!("software = {v:?}"));
+    }
+    if !gedent_parts.is_empty() {
+        lines.push(format!("[gedent]     {}", gedent_parts.join(", ")));
+    }
+
+    if let Ok(s) = toml::to_string(&raw.model) {
+        let parts: Vec<&str> = s.lines().filter(|l| !l.is_empty()).collect();
+        if !parts.is_empty() {
+            lines.push(format!("[model]      {}", parts.join(", ")));
+        }
+    }
+
+    if let Ok(s) = toml::to_string(&raw.resources) {
+        let parts: Vec<&str> = s.lines().filter(|l| !l.is_empty()).collect();
+        if !parts.is_empty() {
+            lines.push(format!("[resources]  {}", parts.join(", ")));
+        }
+    }
+
+    if !raw.parameters.is_empty() {
+        let parts: Vec<String> = raw
+            .parameters
+            .iter()
+            .map(|(k, v)| format!("{k} = {v}"))
+            .collect();
+        lines.push(format!("[parameters] {}", parts.join(", ")));
+    }
+
+    lines
+}
+
 // ── Config impl ───────────────────────────────────────────────────────────────
 
 impl Config {
@@ -150,19 +194,44 @@ impl Config {
         Ok(merged.resolve())
     }
 
-    /// Print the merged config. With `--location`, lists all files in the chain.
+    /// Print the merged config. With `--location`, shows per-file contributions
+    /// so the user can see exactly where each value came from.
     pub fn print(self, location: bool) -> Result<(), Error> {
         if location {
-            println!("Config chain (global → local):");
-            for path in Self::collect_chain()? {
-                println!("  {}", path.display());
+            println!("Config chain (global → local):\n");
+            for (path, raw) in Self::collect_chain_raw()? {
+                println!("{}:", path.display());
+                let lines = raw_contributions(&raw);
+                if lines.is_empty() {
+                    println!("  (no values set)");
+                } else {
+                    for line in lines {
+                        println!("  {line}");
+                    }
+                }
+                println!();
             }
+            println!("merged:");
         }
         print!(
             "{}",
             toml::to_string(&self).wrap_err("Failed to serialize config")?
         );
         Ok(())
+    }
+
+    /// Return each config file in the cascade paired with its raw (un-merged) content.
+    fn collect_chain_raw() -> Result<Vec<(PathBuf, RawConfig)>, Error> {
+        Self::collect_chain()?
+            .into_iter()
+            .map(|path| {
+                let content = std::fs::read_to_string(&path)
+                    .wrap_err(format!("Failed to read {}", path.display()))?;
+                let raw: RawConfig = toml::from_str(&content)
+                    .wrap_err(format!("Failed to parse {}", path.display()))?;
+                Ok((path, raw))
+            })
+            .collect()
     }
 
     /// Open a config file in `$EDITOR`.
