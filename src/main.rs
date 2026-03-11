@@ -39,6 +39,9 @@ struct GenOptions {
     mult: Option<i64>,
     nprocs: Option<i64>,
     mem: Option<i64>,
+    /// Raw `KEY=VALUE` strings from `--var`; parsed and inserted into context
+    /// after `[parameters]`, so they win over config file values.
+    vars: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -124,6 +127,9 @@ enum Mode {
         /// Set mem
         #[arg(long, default_value = None)]
         mem: Option<i64>,
+        /// Set an arbitrary template variable (KEY=VALUE, value parsed as TOML)
+        #[arg(long = "var", value_name = "KEY=VALUE")]
+        vars: Vec<String>,
     },
     // Subcommand to deal with configurations
     /// Access gedent configuration
@@ -253,6 +259,7 @@ fn main() -> Result<()> {
                 mult,
                 nprocs,
                 mem,
+                vars,
             } => {
                 let mut molecules: Vec<(PathBuf, Molecule)> = vec![];
                 if let Some(files) = xyz_files {
@@ -272,6 +279,7 @@ fn main() -> Result<()> {
                     mult,
                     nprocs,
                     mem,
+                    vars,
                 };
                 let results = generate_input(template_name, molecules, &opts)?;
                 for input in results {
@@ -633,6 +641,26 @@ fn build_context(
     context
 }
 
+/// Parse a `KEY=VALUE` string into a key and a TOML value.
+/// The value is first tried as a TOML literal (so integers, booleans, and
+/// arrays work without quoting); bare strings that don't parse as TOML fall
+/// back to `Value::String`.
+fn parse_var(s: &str) -> Result<(String, toml::Value), Error> {
+    let (key, val_str) = s
+        .split_once('=')
+        .ok_or_else(|| eyre!("--var must be KEY=VALUE, got {s:?}"))?;
+    if key.is_empty() {
+        bail!("--var key cannot be empty in {s:?}");
+    }
+    // Wrap in a dummy key to let the TOML parser infer the type, then extract.
+    // Falls back to a plain string for values that aren't valid TOML literals.
+    let value = toml::from_str::<toml::Table>(&format!("v = {val_str}"))
+        .ok()
+        .and_then(|mut t| t.remove("v"))
+        .unwrap_or_else(|| toml::Value::String(val_str.to_string()));
+    Ok((key.to_string(), value))
+}
+
 fn render_inputs(
     template: &Template,
     molecules: Vec<(PathBuf, Molecule)>,
@@ -683,6 +711,10 @@ fn generate_input(
 
     let mut context = build_context(&config.model, &config.resources, opts);
     for (key, value) in config.parameters {
+        context.insert(key, &value);
+    }
+    for s in &opts.vars {
+        let (key, value) = parse_var(s)?;
         context.insert(key, &value);
     }
 
@@ -891,5 +923,63 @@ mod tests {
         assert_eq!(inputs.len(), 2);
         assert_eq!(inputs[0].filename, PathBuf::from("mol1.com"));
         assert_eq!(inputs[1].filename, PathBuf::from("mol2.com"));
+    }
+
+    // ── parse_var ─────────────────────────────────────────────────────────────
+
+    #[test]
+    fn parse_var_integer() {
+        let (k, v) = parse_var("nsteps=20").unwrap();
+        assert_eq!(k, "nsteps");
+        assert_eq!(v, toml::Value::Integer(20));
+    }
+
+    #[test]
+    fn parse_var_boolean() {
+        let (k, v) = parse_var("flag=true").unwrap();
+        assert_eq!(k, "flag");
+        assert_eq!(v, toml::Value::Boolean(true));
+    }
+
+    #[test]
+    fn parse_var_array() {
+        let (k, v) = parse_var("atoms=[20, 28]").unwrap();
+        assert_eq!(k, "atoms");
+        assert_eq!(
+            v,
+            toml::Value::Array(vec![toml::Value::Integer(20), toml::Value::Integer(28)])
+        );
+    }
+
+    #[test]
+    fn parse_var_bare_string_fallback() {
+        let (k, v) = parse_var("solvent=water").unwrap();
+        assert_eq!(k, "solvent");
+        assert_eq!(v, toml::Value::String("water".to_string()));
+    }
+
+    #[test]
+    fn parse_var_quoted_string() {
+        let (k, v) = parse_var("solvent=\"dichloromethane\"").unwrap();
+        assert_eq!(k, "solvent");
+        assert_eq!(v, toml::Value::String("dichloromethane".to_string()));
+    }
+
+    #[test]
+    fn parse_var_value_with_equals_sign() {
+        // Only the first '=' is the separator; the rest is part of the value.
+        let (k, v) = parse_var("label=a=b").unwrap();
+        assert_eq!(k, "label");
+        assert_eq!(v, toml::Value::String("a=b".to_string()));
+    }
+
+    #[test]
+    fn parse_var_missing_equals_errors() {
+        assert!(parse_var("noequals").is_err());
+    }
+
+    #[test]
+    fn parse_var_empty_key_errors() {
+        assert!(parse_var("=value").is_err());
     }
 }

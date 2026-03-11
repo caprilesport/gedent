@@ -179,7 +179,7 @@ optimization then single-point). Workflows pre-populate context and pick the rig
 template automatically. Quality tiers: `quick` / `production` / `benchmark`.
 
 ### 22. `--var KEY=VALUE` CLI context override
-**Status:** not started
+**Status:** done
 The `[parameters]` section in `gedent.toml` is the escape hatch for arbitrary
 Tera variables, but editing a file for a one-off run is annoying. A `--var`
 flag on `gedent gen` lets you inject or override any context variable inline:
