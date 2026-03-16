@@ -4,7 +4,7 @@ jobtype = "freq"
 requires = ["method", "basis_set", "charge", "mult", "nprocs", "mem", "Molecule"]
 description = "Numerical frequency calculation"
 #}
-! {{ method }} {{ basis_set }}{% if dispersion is defined %} {{ dispersion }}{% endif %}{% if solvation %}{% if solvation_model is defined and solvation_model == "alpb" %} ALPB({{ solvent }}){% elif solvation_model is defined and solvation_model == "cpcm" %} CPCM({{ solvent }}){% else %} SMD({{ solvent }}){% endif %}{% endif %}
+! {{ method }} {{ basis_set }}{% if dispersion is defined %} {{ dispersion }}{% endif %}{% if solvation %}{% if solvation_model is defined and solvation_model == "alpb" %} ALPB({{ solvent }}){% elif solvation_model is defined and solvation_model == "cpcm" %} CPCM({{ solvent }}){% endif %}{% endif %}
 ! NumFreq
 
 %pal
@@ -12,7 +12,12 @@ description = "Numerical frequency calculation"
 end
 
 %maxcore {{ mem }}
-
+{% if solvation and (solvation_model is not defined or solvation_model == "smd") -%}
+%cpcm
+ smd true
+ SMDsolvent "{{ solvent }}"
+end
+{% endif -%}
 *xyz {{ charge }} {{ mult }}
 {{ print_coords(molecule = Molecule) }}
 *

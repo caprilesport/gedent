@@ -320,7 +320,8 @@ fn parse_frontmatter(body: &str) -> TemplateMeta {
         return TemplateMeta::default();
     };
     let end = inner_start + end_offset;
-    let raw = body[inner_start..end].trim();
+    // Strip optional `-` from whitespace-trim comment syntax ({#- ... -#})
+    let raw = body[inner_start..end].trim_matches('-').trim();
     let table: toml::Table = match toml::from_str(raw) {
         Ok(t) => t,
         Err(_) => return TemplateMeta::default(),
@@ -707,6 +708,15 @@ end
         assert_eq!(meta.software.as_deref(), Some("orca"));
         assert_eq!(meta.jobtype.as_deref(), Some("sp"));
         assert_eq!(meta.requires, vec!["method", "basis_set"]);
+        assert_eq!(meta.description.as_deref(), Some("Single point"));
+    }
+
+    #[test]
+    fn parse_frontmatter_whitespace_trim_syntax() {
+        // {#- ... -#} is valid Tera whitespace-trimming comment syntax
+        let body = "{#-\nsoftware = \"orca\"\njobtype = \"sp\"\nrequires = [\"method\"]\ndescription = \"Single point\"\n-#}\n! {{ method }}";
+        let meta = parse_frontmatter(body);
+        assert_eq!(meta.software.as_deref(), Some("orca"));
         assert_eq!(meta.description.as_deref(), Some("Single point"));
     }
 

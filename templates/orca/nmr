@@ -4,14 +4,19 @@ jobtype = "nmr"
 requires = ["charge", "mult", "nprocs", "mem", "Molecule"]
 description = "NMR chemical shifts (TPSS/pcsseg-1, 1H)"
 #}
-! TPSS pcsseg-1 AUTOAUX NMR{% if solvation %}{% if solvation_model is defined and solvation_model == "alpb" %} ALPB({{ solvent }}){% elif solvation_model is defined and solvation_model == "cpcm" %} CPCM({{ solvent }}){% else %} SMD({{ solvent }}){% endif %}{% endif %}
+! TPSS pcsseg-1 AUTOAUX NMR{% if solvation %}{% if solvation_model is defined and solvation_model == "alpb" %} ALPB({{ solvent }}){% elif solvation_model is defined and solvation_model == "cpcm" %} CPCM({{ solvent }}){% endif %}{% endif %}
 
 %pal
  nprocs {{ nprocs }}
 end
 
 %maxcore {{ mem }}
-
+{% if solvation and (solvation_model is not defined or solvation_model == "smd") -%}
+%cpcm
+ smd true
+ SMDsolvent "{{ solvent }}"
+end
+{% endif -%}
 *xyz {{ charge }} {{ mult }}
 {{ print_coords(molecule = Molecule) }}
 *

@@ -4,7 +4,7 @@ jobtype = "irc"
 requires = ["method", "basis_set", "charge", "mult", "nprocs", "mem", "Molecule"]
 description = "Intrinsic reaction coordinate — requires a prior hessian file (name.hess)"
 #}
-! {{ method }} {{ basis_set }}{% if dispersion is defined %} {{ dispersion }}{% endif %}{% if solvation %}{% if solvation_model is defined and solvation_model == "alpb" %} ALPB({{ solvent }}){% elif solvation_model is defined and solvation_model == "cpcm" %} CPCM({{ solvent }}){% else %} SMD({{ solvent }}){% endif %}{% endif %}
+! {{ method }} {{ basis_set }}{% if dispersion is defined %} {{ dispersion }}{% endif %}{% if solvation %}{% if solvation_model is defined and solvation_model == "alpb" %} ALPB({{ solvent }}){% elif solvation_model is defined and solvation_model == "cpcm" %} CPCM({{ solvent }}){% endif %}{% endif %}
 ! IRC KDIIS SOSCF TightSCF
 
 %pal
@@ -12,7 +12,12 @@ description = "Intrinsic reaction coordinate — requires a prior hessian file (
 end
 
 %maxcore {{ mem }}
-
+{% if solvation and (solvation_model is not defined or solvation_model == "smd") -%}
+%cpcm
+ smd true
+ SMDsolvent "{{ solvent }}"
+end
+{% endif -%}
 %irc
  maxiter 40
  TolRMSG  3.e-4

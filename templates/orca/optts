@@ -2,9 +2,9 @@
 software = "orca"
 jobtype = "optts"
 requires = ["method", "basis_set", "charge", "mult", "nprocs", "mem", "Molecule", "ts_active_atoms"]
-description = "Transition state optimization with hybrid hessian and numerical frequency"
+description = "Transition state optimization with numerical frequency"
 #}
-! {{ method }} {{ basis_set }}{% if dispersion is defined %} {{ dispersion }}{% endif %}{% if solvation %}{% if solvation_model is defined and solvation_model == "alpb" %} ALPB({{ solvent }}){% elif solvation_model is defined and solvation_model == "cpcm" %} CPCM({{ solvent }}){% else %} SMD({{ solvent }}){% endif %}{% endif %}
+! {{ method }} {{ basis_set }}{% if dispersion is defined %} {{ dispersion }}{% endif %}{% if solvation %}{% if solvation_model is defined and solvation_model == "alpb" %} ALPB({{ solvent }}){% elif solvation_model is defined and solvation_model == "cpcm" %} CPCM({{ solvent }}){% endif %}{% endif %}
 ! OptTS SlowConv NumFreq
 
 %pal
@@ -12,12 +12,19 @@ description = "Transition state optimization with hybrid hessian and numerical f
 end
 
 %maxcore {{ mem }}
-
+{% if solvation and (solvation_model is not defined or solvation_model == "smd") -%}
+%cpcm
+ smd true
+ SMDsolvent "{{ solvent }}"
+end
+{% endif -%}
 %geom
  maxiter {% if maxiter is defined %}{{ maxiter }}{% else %}256{% endif %}
- ts_active_atoms { {{ ts_active_atoms }} } end
- calc_hess true
- hybrid_hess { {{ ts_active_atoms }} } end
+ ts_active_atoms { {% for atom in ts_active_atoms %}{{ atom - 1 }}{% if not loop.last %} {% endif %}{% endfor %} } end{% if start_hessian is defined and start_hessian %}
+ InHess Read
+ InHessName "{{ name }}.hess"{% elif calc_hess is defined and calc_hess %}
+ calc_hess true{% elif hybrid_hess is defined and hybrid_hess %}
+ hybrid_hess { {% for atom in ts_active_atoms %}{{ atom - 1 }}{% if not loop.last %} {% endif %}{% endfor %}{% if hybrid_hess_extra_atoms is defined %} {% for atom in hybrid_hess_extra_atoms %}{{ atom - 1 }}{% if not loop.last %} {% endif %}{% endfor %}{% endif %} } end{% endif %}
 end
 
 *xyz {{ charge }} {{ mult }}

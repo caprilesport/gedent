@@ -1,5 +1,4 @@
 use crate::molecule::Molecule;
-use crate::software::SoftwareDb;
 use std::fmt;
 
 /// Severity of a validation [`Diagnostic`].
@@ -51,14 +50,11 @@ impl fmt::Display for Diagnostic {
 /// Run all validation checks and return every finding as a [`Vec<Diagnostic>`].
 ///
 /// Molecule-specific checks (charge/mult parity, superposed atoms) are skipped
-/// when `molecule` is `None`. `software` is the resolved software name from
-/// config/CLI options and is used for compatibility rule matching.
+/// when `molecule` is `None`.
 pub fn validate(
     molecule: Option<&Molecule>,
     context: &tera::Context,
     requires: &[String],
-    db: &SoftwareDb,
-    software: Option<&str>,
 ) -> Vec<Diagnostic> {
     let mut diags = vec![];
     if let Some(mol) = molecule {
@@ -79,8 +75,6 @@ pub fn validate(
         requires
     };
     diags.extend(check_missing_vars(context, effective_requires));
-    diags.extend(check_compat(context, db, software));
-    diags.extend(check_method_vars(context, db));
     diags
 }
 
@@ -190,86 +184,6 @@ fn check_missing_vars(context: &tera::Context, requires: &[String]) -> Vec<Diagn
         .collect()
 }
 
-fn check_compat(
-    context: &tera::Context,
-    db: &SoftwareDb,
-    software: Option<&str>,
-) -> Vec<Diagnostic> {
-    let json = context.clone().into_json();
-    let method = json
-        .get("method")
-        .and_then(|v| v.as_str())
-        .map(str::to_lowercase);
-    let solvation = json
-        .get("solvation")
-        .and_then(serde_json::Value::as_bool)
-        .unwrap_or(false);
-    let solvation_model = json
-        .get("solvation_model")
-        .and_then(|v| v.as_str())
-        .map(str::to_lowercase);
-
-    let mut diags = vec![];
-
-    for rule in &db.compat {
-        let method_matches = rule.method.as_deref().map_or(true, |rm| {
-            method.as_deref() == Some(rm.to_lowercase().as_str())
-        });
-        let software_matches = rule.software.as_deref().map_or(true, |rs| {
-            software.is_some_and(|s| s.to_lowercase() == rs.to_lowercase())
-        });
-
-        if !method_matches || !software_matches {
-            continue;
-        }
-
-        if let Some(required_model) = &rule.require_solvation_model {
-            if solvation {
-                let model_ok = solvation_model
-                    .as_deref()
-                    .is_some_and(|m| m == required_model.to_lowercase().as_str());
-                if !model_ok {
-                    let msg = rule.message.as_deref().unwrap_or(
-                        "incompatible solvation model for this method/software combination",
-                    );
-                    diags.push(Diagnostic::error(msg));
-                }
-            }
-        }
-    }
-
-    diags
-}
-
-fn check_method_vars(context: &tera::Context, db: &SoftwareDb) -> Vec<Diagnostic> {
-    let json = context.clone().into_json();
-    let method_str = match json.get("method").and_then(|v| v.as_str()) {
-        Some(m) => m.to_owned(),
-        None => return vec![],
-    };
-
-    let Some(entry) = db.get_method(&method_str) else {
-        return vec![];
-    };
-
-    let mut diags = vec![];
-
-    if entry.has_own_basis && json.get("basis_set").is_some() {
-        diags.push(Diagnostic::warning(format!(
-            "{method_str} has its own basis set; \
-             configured basis_set will be ignored by the template"
-        )));
-    }
-    if entry.has_own_dispersion && json.get("dispersion").is_some() {
-        diags.push(Diagnostic::warning(format!(
-            "{method_str} has its own dispersion correction; \
-             configured dispersion will be ignored by the template"
-        )));
-    }
-
-    diags
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -292,10 +206,6 @@ mod tests {
             ctx.insert(*k, v);
         }
         ctx
-    }
-
-    fn empty_db() -> SoftwareDb {
-        SoftwareDb::default()
     }
 
     // ── charge/mult ────────────────────────────────────────────────────────────
@@ -434,88 +344,6 @@ mod tests {
         assert!(check_missing_vars(&tera::Context::new(), &[]).is_empty());
     }
 
-    // ── check_compat ───────────────────────────────────────────────────────────
-
-    #[test]
-    fn compat_xtb_orca_no_solvation_ok() {
-        // Rule fires only when solvation is active
-        let mut db = SoftwareDb::default();
-        db.compat.push(crate::software::CompatRule {
-            method: Some("xtb".into()),
-            software: Some("orca".into()),
-            require_solvation_model: Some("alpb".into()),
-            message: None,
-        });
-        let mut ctx = tera::Context::new();
-        ctx.insert("method", "xtb");
-        // no solvation
-        assert!(check_compat(&ctx, &db, Some("orca")).is_empty());
-    }
-
-    #[test]
-    fn compat_xtb_orca_wrong_model_errors() {
-        let mut db = SoftwareDb::default();
-        db.compat.push(crate::software::CompatRule {
-            method: Some("xtb".into()),
-            software: Some("orca".into()),
-            require_solvation_model: Some("alpb".into()),
-            message: Some("XTB in ORCA requires ALPB".into()),
-        });
-        let mut ctx = tera::Context::new();
-        ctx.insert("method", "xtb");
-        ctx.insert("solvation", &true);
-        ctx.insert("solvation_model", "cpcm");
-        let diags = check_compat(&ctx, &db, Some("orca"));
-        assert_eq!(diags.len(), 1);
-        assert_eq!(diags[0].severity, Severity::Error);
-        assert!(diags[0].message.contains("ALPB"));
-    }
-
-    #[test]
-    fn compat_xtb_orca_correct_model_ok() {
-        let mut db = SoftwareDb::default();
-        db.compat.push(crate::software::CompatRule {
-            method: Some("xtb".into()),
-            software: Some("orca".into()),
-            require_solvation_model: Some("alpb".into()),
-            message: None,
-        });
-        let mut ctx = tera::Context::new();
-        ctx.insert("method", "xtb");
-        ctx.insert("solvation", &true);
-        ctx.insert("solvation_model", "alpb");
-        assert!(check_compat(&ctx, &db, Some("orca")).is_empty());
-    }
-
-    // ── check_method_vars ──────────────────────────────────────────────────────
-
-    #[test]
-    fn method_vars_warns_on_own_basis() {
-        let mut db = SoftwareDb::default();
-        db.methods.insert(
-            "pbeh-3c".into(),
-            crate::software::MethodEntry {
-                has_own_basis: true,
-                has_own_dispersion: false,
-            },
-        );
-        let mut ctx = tera::Context::new();
-        ctx.insert("method", "pbeh-3c");
-        ctx.insert("basis_set", "def2-tzvp");
-        let diags = check_method_vars(&ctx, &db);
-        assert_eq!(diags.len(), 1);
-        assert_eq!(diags[0].severity, Severity::Warning);
-        assert!(diags[0].message.contains("basis_set"));
-    }
-
-    #[test]
-    fn method_vars_silent_when_unknown_method() {
-        let mut ctx = tera::Context::new();
-        ctx.insert("method", "pbe0");
-        ctx.insert("basis_set", "def2-tzvp");
-        assert!(check_method_vars(&ctx, &empty_db()).is_empty());
-    }
-
     // ── validate (integration) ─────────────────────────────────────────────────
 
     #[test]
@@ -528,7 +356,7 @@ mod tests {
         // 2 electrons, charge=0, mult=2 → (2-1)=1 unpaired, (2-1)%2 != 0 → parity error
         let ctx = ctx_with_ints(&[("charge", 0), ("mult", 2)]);
         let requires = vec!["basis_set".to_string()];
-        let diags = validate(Some(&mol), &ctx, &requires, &empty_db(), None);
+        let diags = validate(Some(&mol), &ctx, &requires);
         // superposed(1) + charge/mult parity(1) + missing basis_set(1) = 3
         assert_eq!(diags.len(), 3);
         assert!(diags.iter().all(|d| d.severity == Severity::Error));
@@ -537,7 +365,7 @@ mod tests {
     #[test]
     fn validate_no_molecule_skips_geometry_checks() {
         let requires = vec!["method".to_string()];
-        let diags = validate(None, &tera::Context::new(), &requires, &empty_db(), None);
+        let diags = validate(None, &tera::Context::new(), &requires);
         assert_eq!(diags.len(), 1);
         assert!(diags[0].message.contains("method"));
     }

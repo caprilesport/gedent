@@ -4,7 +4,7 @@ jobtype = "opt"
 requires = ["method", "basis_set", "charge", "mult", "nprocs", "mem", "Molecule"]
 description = "Geometry optimization"
 #}
-! {{ method }} {{ basis_set }}{% if dispersion is defined %} {{ dispersion }}{% endif %}{% if solvation %}{% if solvation_model is defined and solvation_model == "alpb" %} ALPB({{ solvent }}){% elif solvation_model is defined and solvation_model == "cpcm" %} CPCM({{ solvent }}){% else %} SMD({{ solvent }}){% endif %}{% endif %}
+! {{ method }} {{ basis_set }}{% if dispersion is defined %} {{ dispersion }}{% endif %}{% if solvation %}{% if solvation_model is defined and solvation_model == "alpb" %} ALPB({{ solvent }}){% elif solvation_model is defined and solvation_model == "cpcm" %} CPCM({{ solvent }}){% endif %}{% endif %}
 ! Opt
 
 %pal
@@ -12,7 +12,12 @@ description = "Geometry optimization"
 end
 
 %maxcore {{ mem }}
-
+{% if solvation and (solvation_model is not defined or solvation_model == "smd") -%}
+%cpcm
+ smd true
+ SMDsolvent "{{ solvent }}"
+end
+{% endif -%}
 {% if maxiter is defined -%}
 %geom
  maxiter {{ maxiter }}
@@ -23,6 +28,16 @@ end
 %geom
  InHess Read
  InHessName "{{ name }}.hess"
+end
+
+{% elif calc_hess is defined and calc_hess -%}
+%geom
+ calc_hess true
+end
+
+{% elif hybrid_hess_atoms is defined -%}
+%geom
+ hybrid_hess { {% for atom in hybrid_hess_atoms %}{{ atom - 1 }}{% if not loop.last %} {% endif %}{% endfor %} } end
 end
 
 {% endif -%}

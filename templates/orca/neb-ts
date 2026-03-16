@@ -4,7 +4,7 @@ jobtype = "neb-ts"
 requires = ["method", "basis_set", "charge", "mult", "nprocs", "mem", "Molecule"]
 description = "NEB-TS transition state search — place product as name.end.xyz, optionally set ts_active_atoms in [parameters]"
 #}
-! {{ method }} {{ basis_set }}{% if dispersion is defined %} {{ dispersion }}{% endif %}{% if solvation %}{% if solvation_model is defined and solvation_model == "alpb" %} ALPB({{ solvent }}){% elif solvation_model is defined and solvation_model == "cpcm" %} CPCM({{ solvent }}){% else %} SMD({{ solvent }}){% endif %}{% endif %}
+! {{ method }} {{ basis_set }}{% if dispersion is defined %} {{ dispersion }}{% endif %}{% if solvation %}{% if solvation_model is defined and solvation_model == "alpb" %} ALPB({{ solvent }}){% elif solvation_model is defined and solvation_model == "cpcm" %} CPCM({{ solvent }}){% endif %}{% endif %}
 ! NEB-TS
 
 %pal
@@ -12,7 +12,12 @@ description = "NEB-TS transition state search — place product as name.end.xyz,
 end
 
 %maxcore {{ mem }}
-
+{% if solvation and (solvation_model is not defined or solvation_model == "smd") -%}
+%cpcm
+ smd true
+ SMDsolvent "{{ solvent }}"
+end
+{% endif -%}
 %neb
  neb_end_xyzfile "{{ name }}.end.xyz"
  nimages {% if nimages is defined %}{{ nimages }}{% else %}14{% endif %}
@@ -21,7 +26,7 @@ end
 
 {% if ts_active_atoms is defined -%}
 %geom
- ts_active_atoms { {{ ts_active_atoms }} } end
+ ts_active_atoms { {% for atom in ts_active_atoms %}{{ atom - 1 }}{% if not loop.last %} {% endif %}{% endfor %} } end
  maxiter 256
 end
 
