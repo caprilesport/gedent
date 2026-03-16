@@ -1,10 +1,9 @@
-{#
+{#-
 software = "orca"
 jobtype = "solvator"
 requires = ["charge", "mult", "nprocs", "mem", "Molecule", "solvent"]
 description = "Explicit solvation shell generation at XTB level"
-#}
-! XTB ALPB({{ solvent }})
+-#}! XTB ALPB({{ solvent }})
 
 %solvator nsolv 5 end
 

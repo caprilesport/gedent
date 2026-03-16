@@ -1,10 +1,9 @@
-{#
+{#-
 software = "orca"
 jobtype = "scan"
 requires = ["method", "basis_set", "charge", "mult", "nprocs", "mem", "Molecule", "scan_atoms", "scan_end", "scan_steps"]
 description = "Relaxed surface scan — set scan_atoms (1-based list: [i,j] bond, [i,j,k] angle, [i,j,k,l] dihedral), scan_end, scan_steps in [parameters]"
-#}
-! {{ method }} {{ basis_set }}{% if dispersion is defined %} {{ dispersion }}{% endif %}{% if solvation %}{% if solvation_model is defined and solvation_model == "alpb" %} ALPB({{ solvent }}){% elif solvation_model is defined and solvation_model == "cpcm" %} CPCM({{ solvent }}){% endif %}{% endif %}
+-#}! {{ method }} {{ basis_set }}{% if dispersion is defined %} {{ dispersion }}{% endif %}{% if solvation %}{% if solvation_model is defined and solvation_model == "alpb" %} ALPB({{ solvent }}){% elif solvation_model is defined and solvation_model == "cpcm" %} CPCM({{ solvent }}){% endif %}{% endif %}
 ! Opt
 
 %pal
