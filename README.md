@@ -232,7 +232,7 @@ Checks performed:
 ## Shell completion
 
 ```bash
-gedent --generate fish   # or bash, zsh
+gedent --generate fish   # bash, elvish, fish, nushell, powershell, or zsh
 ```
 
 Pipe the output to the appropriate completion file for your shell. Template

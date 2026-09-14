@@ -3,8 +3,9 @@
 use crate::config::{Config, ModelConfig, ResourcesConfig};
 use crate::molecule::Molecule;
 use crate::template::Template;
-use clap::{Command, CommandFactory, Parser, Subcommand};
-use clap_complete::{generate, Shell};
+use clap::{Command, CommandFactory, Parser, Subcommand, ValueEnum};
+use clap_complete::{generate, Generator, Shell};
+use clap_complete_nushell::Nushell;
 use clap_verbosity_flag::{Verbosity, WarnLevel};
 use color_eyre::eyre::{bail, eyre, Report as Error, Result, WrapErr};
 use include_dir::{include_dir, Dir};
@@ -71,7 +72,7 @@ struct Cli {
     health: bool,
     /// If provided, outputs the completion file for given shell.
     #[arg(long = "generate", value_enum)]
-    generator: Option<Shell>,
+    generator: Option<CompletionShell>,
     #[command(flatten)]
     verbose: Verbosity<WarnLevel>,
 }
@@ -80,6 +81,18 @@ struct Cli {
 enum CompleteSubcommand {
     /// List completable template names (one per line).
     Templates,
+}
+
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum CompletionShell {
+    Bash,
+    Elvish,
+    Fish,
+    #[value(alias = "nu")]
+    Nushell,
+    #[value(name = "powershell")]
+    PowerShell,
+    Zsh,
 }
 
 #[derive(Debug, Subcommand)]
@@ -240,6 +253,7 @@ fn main() -> Result<()> {
         let mut cmd = Cli::command();
         info!("Generating completion file for {generator:?}...");
         print_completions(generator, &mut cmd);
+        return Ok(());
     }
 
     if Config::gedent_home().is_err() {
@@ -372,20 +386,67 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn print_completions(gen: Shell, cmd: &mut Command) {
-    let mut buf: Vec<u8> = Vec::new();
-    generate(gen, cmd, cmd.get_name().to_string(), &mut buf);
-    let script = String::from_utf8(buf).unwrap_or_default();
-    print!("{}", patch_completions(gen, script));
+fn print_completions(shell: CompletionShell, cmd: &mut Command) {
+    let script = match shell {
+        CompletionShell::Bash => generate_completions(Shell::Bash, cmd),
+        CompletionShell::Elvish => generate_completions(Shell::Elvish, cmd),
+        CompletionShell::Fish => generate_completions(Shell::Fish, cmd),
+        CompletionShell::Nushell => generate_completions(Nushell, cmd),
+        CompletionShell::PowerShell => generate_completions(Shell::PowerShell, cmd),
+        CompletionShell::Zsh => generate_completions(Shell::Zsh, cmd),
+    };
+    print!("{}", patch_completions(shell, script));
 }
 
-fn patch_completions(shell: Shell, script: String) -> String {
+fn generate_completions(gen: impl Generator, cmd: &mut Command) -> String {
+    let mut buf: Vec<u8> = Vec::new();
+    generate(gen, cmd, cmd.get_name().to_string(), &mut buf);
+    String::from_utf8(buf).unwrap_or_default()
+}
+
+fn patch_completions(shell: CompletionShell, script: String) -> String {
     match shell {
-        Shell::Zsh => patch_zsh(script),
-        Shell::Bash => patch_bash(script),
-        Shell::Fish => patch_fish(script),
+        CompletionShell::Zsh => patch_zsh(script),
+        CompletionShell::Bash => patch_bash(script),
+        CompletionShell::Fish => patch_fish(script),
+        CompletionShell::Nushell => patch_nushell(script),
         _ => script,
     }
+}
+
+fn patch_nushell(mut script: String) -> String {
+    script = script.replace(
+        "module completions {\n\n",
+        r#"module completions {
+
+  def "nu-complete gedent template-names" [] {
+    ^gedent _complete templates | lines
+  }
+
+"#,
+    );
+    add_nushell_completer(&mut script, "gedent gen", "template_name");
+    add_nushell_completer(&mut script, "gedent template print", "template");
+    add_nushell_completer(&mut script, "gedent template edit", "template");
+    script
+}
+
+fn add_nushell_completer(script: &mut String, command: &str, argument: &str) {
+    let command_start = format!("  export extern \"{command}\" [\n");
+    let Some(block_start) = script.find(&command_start) else {
+        return;
+    };
+    let arguments_start = block_start + command_start.len();
+    let Some(block_end) = script[arguments_start..].find("\n  ]") else {
+        return;
+    };
+    let argument = format!("    {argument}: string");
+    let block = &script[arguments_start..arguments_start + block_end];
+    let Some(argument_start) = block.find(&argument) else {
+        return;
+    };
+    let insert_at = arguments_start + argument_start + argument.len();
+    script.insert_str(insert_at, r#"@"nu-complete gedent template-names""#);
 }
 
 fn patch_zsh(mut script: String) -> String {
@@ -803,6 +864,40 @@ mod tests {
         use clap::CommandFactory;
 
         Cli::command().debug_assert();
+    }
+
+    #[test]
+    fn nushell_is_a_supported_completion_shell() {
+        let cli = Cli::try_parse_from(["gedent", "--generate", "nushell"]).unwrap();
+        assert!(matches!(cli.generator, Some(CompletionShell::Nushell)));
+
+        let cli = Cli::try_parse_from(["gedent", "--generate", "nu"]).unwrap();
+        assert!(matches!(cli.generator, Some(CompletionShell::Nushell)));
+    }
+
+    #[test]
+    fn nushell_completions_include_dynamic_template_names() {
+        let mut cmd = Cli::command();
+        let script = patch_completions(
+            CompletionShell::Nushell,
+            generate_completions(Nushell, &mut cmd),
+        );
+
+        assert!(script.contains(r#"def "nu-complete gedent template-names" []"#));
+        assert!(script.contains(r#"template_name: string@"nu-complete gedent template-names""#));
+        assert_eq!(
+            script
+                .matches(r#"template: string@"nu-complete gedent template-names""#)
+                .count(),
+            2
+        );
+
+        let new_command = script
+            .split(r#"export extern "gedent template new" ["#)
+            .nth(1)
+            .and_then(|rest| rest.split("\n  ]").next())
+            .expect("template new completion block");
+        assert!(!new_command.contains("nu-complete gedent template-names"));
     }
 
     #[test]
